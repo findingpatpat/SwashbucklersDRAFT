@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>100 Yard Draft Race</title>
+<style>
+:root{
+  font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  color-scheme:dark;
+  --bg:#0b1015; --panel:#121922; --line:#ffffff18; --gold:#f1c84b;
+  --green1:#245f35; --green2:#2b6e3e; --red:#e35b5b; --blue:#66a9ff;
+}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at top,#17202a 0,#0b1015 52%);color:#fff;min-height:100vh}
+button,input{font:inherit} button{cursor:pointer}.hidden{display:none!important}
+.join-wrap{min-height:100vh;display:grid;place-items:center;padding:24px}
+.join-card{width:min(92vw,460px);background:#121922;border:1px solid var(--line);border-radius:22px;padding:28px;box-shadow:0 24px 80px #0008}
+.logo{font-size:46px;margin-bottom:8px} h1{margin:0 0 8px;font-size:34px}.muted{opacity:.72}
+input{width:100%;margin:16px 0 10px;padding:14px 16px;border-radius:12px;border:1px solid #ffffff24;background:#0b1118;color:#fff;font-size:17px}
+.primary{border:0;border-radius:12px;padding:14px 18px;background:var(--gold);color:#111;font-weight:900}.full{width:100%}
+#error{min-height:20px;color:#ff9b9b;margin-top:8px}
+.app{width:min(1240px,100%);margin:0 auto;padding:16px}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.left-meta,.right-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.badge{padding:8px 11px;background:var(--panel);border:1px solid var(--line);border-radius:999px;font-size:14px}
+.host-badge{background:#584808;border-color:#d8b63a66}
+#message{min-height:24px;margin:4px 0 10px;font-size:14px;opacity:.9}
+.track-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:10px;box-shadow:0 18px 45px #0005}
+.track{position:relative;overflow:hidden;border-radius:10px;border:3px solid #e9ecef}
+.lane{position:relative;height:48px;border-bottom:1px solid #ffffff55;background:linear-gradient(90deg,transparent 9.8%,#ffffff25 10%,transparent 10.2%),linear-gradient(90deg,var(--green1),var(--green2));background-size:10% 100%,100% 100%}
+.lane:last-child{border-bottom:0}
+.lane-name{position:absolute;left:8px;top:5px;z-index:4;font-size:11px;font-weight:900;padding:2px 6px;border-radius:6px;background:#0007;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.runner{position:absolute;top:20px;left:2.5%;font-size:23px;transform:translateX(-50%) scaleX(-1);transform-origin:center;transition:left 80ms linear,transform 120ms ease;will-change:left,transform;filter:drop-shadow(0 2px 2px #0007)}
+.runner.fallen{transform:translateX(-50%) rotate(90deg) scaleX(-1)}
+.runner.attacking-up{transform:translateX(-50%) translateY(-7px) scaleX(-1)}
+.runner.attacking-down{transform:translateX(-50%) translateY(7px) scaleX(-1)}
+.finish{position:absolute;right:0;top:0;bottom:0;width:20px;background:repeating-linear-gradient(45deg,#fff 0 5px,#111 5px 10px)}
+.place{position:absolute;right:26px;top:12px;padding:3px 7px;border-radius:8px;background:#000b;font-weight:900;font-size:12px}
+.controls-grid{display:grid;grid-template-columns:90px minmax(0,1fr) 90px;gap:10px;align-items:center;margin:16px auto 8px;max-width:820px}
+.attack-stack{display:grid;gap:8px}
+.attack{min-height:58px;border:1px solid #ffffff22;border-radius:14px;background:#293949;color:#fff;font-weight:1000;font-size:24px;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.attack:active,.attack.pressed{transform:scale(.96);background:#3e5972}
+.strides{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stride{min-height:82px;border:1px solid #ffffff22;border-radius:16px;background:#e6bf47;color:#111;font-weight:1000;font-size:25px;box-shadow:0 7px 0 #9d8128;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.stride:active,.stride.pressed{transform:translateY(5px);box-shadow:0 2px 0 #9d8128}
+.stride:disabled,.attack:disabled{opacity:.28;cursor:not-allowed;box-shadow:none}
+.control-hint{text-align:center;font-size:13px;opacity:.68;margin-bottom:12px;line-height:1.5}
+.lobby-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+.ready-btn,.reset-btn{border:1px solid var(--line);border-radius:12px;padding:11px 15px;font-weight:800;color:#fff;background:#27313d}
+.ready-btn.on{background:#287d43}
+.start-btn{border:0;border-radius:12px;padding:12px 18px;background:var(--gold);color:#111;font-weight:1000}
+.start-btn:disabled{opacity:.4;cursor:not-allowed}
+.results{width:min(700px,100%);margin:18px auto 0}
+.result-row{display:flex;justify-content:space-between;padding:10px 14px;margin:6px 0;border-radius:10px;background:var(--panel);border:1px solid var(--line)}
+.countdown{position:fixed;inset:0;z-index:20;display:grid;place-items:center;background:#000a;font-size:min(26vw,160px);font-weight:1000;text-shadow:0 8px 30px #000}
+.fall-banner{position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:18;background:#8f2e2e;padding:12px 18px;border-radius:12px;font-size:22px;font-weight:1000}
+@media(max-width:700px){
+  .app{padding:10px}.lane{height:42px}.runner{top:18px;font-size:20px}.lane-name{font-size:10px;max-width:125px}
+  .controls-grid{grid-template-columns:58px minmax(0,1fr) 58px;gap:6px;position:sticky;bottom:8px;z-index:10}
+  .stride{min-height:92px;font-size:20px}.attack{min-height:44px;font-size:20px;padding:8px}
+  .control-hint{font-size:12px}
+}
+</style>
+</head>
+<body>
+
+<section id="joinScreen" class="join-wrap">
+  <div class="join-card">
+    <div class="logo">🏈</div>
+    <h1>100 Yard Draft Race</h1>
+    <p class="muted">Sprint, battle the runners beside you, and earn your draft position.</p>
+    <input id="name" maxlength="20" autocomplete="off" placeholder="Your name">
+    <button id="joinBtn" class="primary full">JOIN RACE</button>
+    <div id="error"></div>
+  </div>
+</section>
+
+<section id="gameScreen" class="app hidden">
+  <div class="topbar">
+    <div class="left-meta">
+      <div class="badge"><strong id="playerCount">0</strong>/10 Players</div>
+      <div id="stateLabel" class="badge">Lobby</div>
+    </div>
+    <div class="right-meta">
+      <div id="hostLabel" class="badge host-badge">👑 Host</div>
+    </div>
+  </div>
+
+  <div id="message"></div>
+
+  <div class="track-card">
+    <div id="track" class="track"></div>
+  </div>
+
+  <div class="controls-grid">
+    <div class="attack-stack">
+      <button id="upBtn" class="attack" disabled>↑</button>
+      <button id="downBtn" class="attack" disabled>↓</button>
+    </div>
+
+    <div class="strides">
+      <button id="leftBtn" class="stride" disabled>← LEFT</button>
+      <button id="rightBtn" class="stride" disabled>RIGHT →</button>
+    </div>
+
+    <div class="attack-stack" aria-hidden="true">
+      <button class="attack" disabled>💥</button>
+      <button class="attack" disabled>💥</button>
+    </div>
+  </div>
+
+  <div class="control-hint">
+    <strong>← →</strong> alternate to run &nbsp;•&nbsp;
+    <strong>↑ ↓</strong> hit the runner in the adjacent lane when you're within 3 yards.<br>
+    First hit wins. Truly simultaneous hits cancel each other.
+  </div>
+
+  <div class="lobby-actions">
+    <button id="readyBtn" class="ready-btn">I'M READY</button>
+    <button id="startBtn" class="start-btn hidden">START RACE</button>
+    <button id="resetBtn" class="reset-btn hidden">RESET RACE</button>
+  </div>
+
+  <div id="results" class="results"></div>
+</section>
+
+<div id="countdown" class="countdown hidden">3</div>
+<div id="fallBanner" class="fall-banner hidden">💥 YOU'RE DOWN!</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

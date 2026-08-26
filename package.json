@@ -1,0 +1,17 @@
+{
+  "name": "online-100-yard-draft-race-v3",
+  "version": "3.0.0",
+  "private": true,
+  "description": "10-player online 100-yard draft race with lane knockdowns",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "socket.io": "^4.8.1"
+  }
+}
