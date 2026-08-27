@@ -21,15 +21,17 @@ const SNAPSHOT_MS = 80;
 const HIT_RANGE_YARDS = 3.0;       // Must be within 3 yards longitudinally.
 const CLASH_WINDOW_MS = 140;       // Opposite attacks inside this window cancel.
 const ATTACK_COOLDOWN_MS = 650;    // Prevents attack-key spam.
-const FALL_DURATION_MS = 1600;     // Fallen runner cannot stride/attack.
+const FALL_DURATION_MS = 2600;     // Fallen runner cannot stride/attack.
 const FALL_SETBACK_YARDS = 1.2;    // Small setback so a hit matters.
 
 // Football rules.
-const THROW_RANGE_YARDS = 12.0;
-const THROW_COOLDOWN_MS = 1100;
+const THROW_RANGE_YARDS = 18.0;
+const THROW_COOLDOWN_MS = 3000;
 const THROW_TRAVEL_MS = 320;
 const BALL_STUMBLE_MS = 500;
-const MAX_BLOCKERS = 3;
+const SHIELD_HITS = 3;
+const NUKE_AWARD_DELAY_MS = 30000;
+const NUKE_STUN_MS = 3000;
 
 app.use(express.static("public"));
 
@@ -37,6 +39,7 @@ let hostId = null;
 let raceState = "lobby"; // lobby | countdown | racing | finished
 let raceStartAt = null;
 let finishOrder = [];
+let nukeAwardTimer = null;
 const players = new Map();
 
 // Pending attacks are held briefly so the server can detect a truly simultaneous clash.
@@ -77,9 +80,11 @@ function payload() {
       place: p.place,
       fallenUntil: p.fallenUntil,
       fallen: isFallen(p, now),
-      blockers: p.blockers,
+      shieldHits: p.shieldHits,
       streakTargetId: p.streakTargetId,
-      streakCount: p.streakCount
+      streakCount: p.streakCount,
+      hasNuke: p.hasNuke,
+      usedNuke: p.usedNuke
     })),
     finishOrder
   };
@@ -96,6 +101,7 @@ function clearPendingAttacks() {
 
 function resetRace() {
   clearPendingAttacks();
+  clearNukeTimer();
   raceState = "lobby";
   raceStartAt = null;
   finishOrder = [];
@@ -112,7 +118,9 @@ function resetRace() {
     p.lastThrow = 0;
     p.streakTargetId = null;
     p.streakCount = 0;
-    p.blockers = 0;
+    p.shieldHits = 0;
+    p.hasNuke = false;
+    p.usedNuke = false;
   }
 
   broadcastState();
@@ -120,6 +128,7 @@ function resetRace() {
 
 function fullResetWhenEmpty() {
   clearPendingAttacks();
+  clearNukeTimer();
   hostId = null;
   raceState = "lobby";
   raceStartAt = null;
@@ -180,18 +189,8 @@ function resolveAttack(attackerId, targetId, direction, createdAt) {
   broadcastState();
 }
 
-function nearestThrowTarget(shooter) {
-  let best = null;
-  let bestScore = Infinity;
-
-  for (const p of players.values()) {
-    if (p.id === shooter.id || p.finished) continue;
-    const longitudinal = Math.abs(p.distance - shooter.distance);
-    if (longitudinal > THROW_RANGE_YARDS) continue;
-    const score = longitudinal + Math.abs(p.lane - shooter.lane) * 1.25;
-    if (score < bestScore) { bestScore = score; best = p; }
-  }
-  return best;
+function playerByNumber(number) {
+  return [...players.values()].find(p => p.lane === number) || null;
 }
 
 function resolveFootball(shooterId, targetId, throwId) {
@@ -208,11 +207,15 @@ function resolveFootball(shooterId, targetId, throwId) {
     return;
   }
 
-  if (target.blockers > 0) {
-    target.blockers -= 1;
+  if (target.shieldHits > 0) {
+    target.shieldHits -= 1;
     shooter.streakTargetId = null;
     shooter.streakCount = 0;
-    io.emit("footballBlocked", { throwId, shooterId, shooterName: shooter.name, targetId, targetName: target.name, blockersLeft: target.blockers });
+    io.emit("footballBlocked", {
+      throwId, shooterId, shooterName: shooter.name,
+      targetId, targetName: target.name,
+      shieldHitsLeft: target.shieldHits
+    });
     broadcastState();
     return;
   }
@@ -223,15 +226,54 @@ function resolveFootball(shooterId, targetId, throwId) {
   target.fallenUntil = Math.max(target.fallenUntil, Date.now() + BALL_STUMBLE_MS);
   target.lastInput = null;
 
-  let earnedBlocker = false;
+  let earnedShield = false;
   if (shooter.streakCount >= 3) {
-    shooter.blockers = Math.min(MAX_BLOCKERS, shooter.blockers + 1);
+    shooter.shieldHits = SHIELD_HITS;
     shooter.streakTargetId = null;
     shooter.streakCount = 0;
-    earnedBlocker = true;
+    earnedShield = true;
   }
 
-  io.emit("footballHit", { throwId, shooterId, shooterName: shooter.name, targetId, targetName: target.name, streakCount: shooter.streakCount, earnedBlocker, blockerCount: shooter.blockers });
+  io.emit("footballHit", {
+    throwId, shooterId, shooterName: shooter.name,
+    targetId, targetName: target.name,
+    streakCount: shooter.streakCount,
+    earnedShield,
+    shieldHits: shooter.shieldHits
+  });
+  broadcastState();
+}
+
+
+function clearNukeTimer() {
+  if (nukeAwardTimer) {
+    clearTimeout(nukeAwardTimer);
+    nukeAwardTimer = null;
+  }
+}
+
+function awardNukeBall() {
+  if (raceState !== "racing") return;
+  const active = [...players.values()].filter(p => !p.finished);
+  if (!active.length) return;
+  active.sort((a, b) => a.distance !== b.distance ? a.distance - b.distance : b.lane - a.lane);
+  const last = active[0];
+  last.hasNuke = true;
+  io.emit("nukeAwarded", { playerId: last.id, playerName: last.name });
+  broadcastState();
+}
+
+function useNukeBall(owner) {
+  if (!owner || !owner.hasNuke || owner.usedNuke || raceState !== "racing") return;
+  owner.hasNuke = false;
+  owner.usedNuke = true;
+  const now = Date.now();
+  for (const p of players.values()) {
+    if (p.id === owner.id || p.finished) continue;
+    p.fallenUntil = Math.max(p.fallenUntil, now + NUKE_STUN_MS);
+    p.lastInput = null;
+  }
+  io.emit("nukeUsed", { playerId: owner.id, playerName: owner.name, stunMs: NUKE_STUN_MS });
   broadcastState();
 }
 
@@ -269,7 +311,9 @@ io.on("connection", socket => {
       lastThrow: 0,
       streakTargetId: null,
       streakCount: 0,
-      blockers: 0
+      shieldHits: 0,
+      hasNuke: false,
+      usedNuke: false
     };
 
     players.set(socket.id, p);
@@ -311,7 +355,9 @@ io.on("connection", socket => {
       p.lastThrow = 0;
       p.streakTargetId = null;
       p.streakCount = 0;
-      p.blockers = 0;
+      p.shieldHits = 0;
+      p.hasNuke = false;
+      p.usedNuke = false;
     }
 
     raceState = "countdown";
@@ -323,6 +369,11 @@ io.on("connection", socket => {
         raceState = "racing";
         io.emit("go", { at: Date.now() });
         broadcastState();
+        clearNukeTimer();
+        nukeAwardTimer = setTimeout(() => {
+          nukeAwardTimer = null;
+          awardNukeBall();
+        }, NUKE_AWARD_DELAY_MS);
       }
     }, COUNTDOWN_MS);
   });
@@ -352,6 +403,7 @@ io.on("connection", socket => {
 
       if (finishOrder.length === players.size) {
         raceState = "finished";
+        clearNukeTimer();
         broadcastState();
       }
     }
@@ -421,25 +473,49 @@ io.on("connection", socket => {
     socket.emit("attackQueued", { direction, targetId: target.id });
   });
 
-  socket.on("throwFootball", () => {
+  socket.on("throwFootballAt", rawNumber => {
     const shooter = players.get(socket.id);
     const now = Date.now();
     if (!shooter || raceState !== "racing" || shooter.finished || isFallen(shooter, now)) return;
-    if (now - shooter.lastThrow < THROW_COOLDOWN_MS) return;
-    shooter.lastThrow = now;
 
-    const target = nearestThrowTarget(shooter);
-    if (!target) {
+    if (now - shooter.lastThrow < THROW_COOLDOWN_MS) {
+      socket.emit("throwCooldown", { remainingMs: THROW_COOLDOWN_MS - (now - shooter.lastThrow) });
+      return;
+    }
+
+    const number = Number(rawNumber);
+    if (!Number.isInteger(number) || number < 1 || number > 10) return;
+
+    const target = playerByNumber(number);
+    if (!target || target.id === shooter.id || target.finished) {
+      socket.emit("footballMiss", { shooterId: shooter.id, reason: "invalid_target" });
+      return;
+    }
+
+    if (Math.abs(target.distance - shooter.distance) > THROW_RANGE_YARDS) {
       shooter.streakTargetId = null;
       shooter.streakCount = 0;
-      socket.emit("footballMiss", { shooterId: shooter.id, reason: "no_target" });
+      socket.emit("footballMiss", { shooterId: shooter.id, targetId: target.id, reason: "out_of_range" });
       broadcastState();
       return;
     }
 
+    shooter.lastThrow = now;
     const throwId = `${shooter.id}-${now}`;
-    io.emit("footballThrown", { throwId, shooterId: shooter.id, shooterName: shooter.name, targetId: target.id, targetName: target.name, travelMs: THROW_TRAVEL_MS });
+    io.emit("footballThrown", {
+      throwId,
+      shooterId: shooter.id,
+      shooterName: shooter.name,
+      targetId: target.id,
+      targetName: target.name,
+      targetNumber: target.lane,
+      travelMs: THROW_TRAVEL_MS
+    });
     setTimeout(() => resolveFootball(shooter.id, target.id, throwId), THROW_TRAVEL_MS);
+  });
+
+  socket.on("useNuke", () => {
+    useNukeBall(players.get(socket.id));
   });
 
   socket.on("resetRace", () => {
@@ -481,5 +557,5 @@ io.on("connection", socket => {
 });
 
 server.listen(PORT, () => {
-  console.log(`100 Yard Draft Race v4 running on port ${PORT}`);
+  console.log(`100 Yard Draft Race v5 running on port ${PORT}`);
 });

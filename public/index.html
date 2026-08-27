@@ -35,7 +35,7 @@ input{width:100%;margin:16px 0 10px;padding:14px 16px;border-radius:12px;border:
 .runner.fallen{transform:translateX(-50%) rotate(90deg) scaleX(-1)}
 .runner.attacking-up{transform:translateX(-50%) translateY(-7px) scaleX(-1)}
 .runner.attacking-down{transform:translateX(-50%) translateY(7px) scaleX(-1)}
-.blockers{position:absolute;top:22px;z-index:3;transform:translateX(-50%);font-size:14px;letter-spacing:-3px;pointer-events:none}
+.shield{position:absolute;top:22px;z-index:3;transform:translateX(-50%);font-size:14px;letter-spacing:-3px;pointer-events:none}
 .football{position:absolute;z-index:8;font-size:19px;transform:translate(-50%,-50%);pointer-events:none;transition:left 320ms linear,top 320ms linear}
 .toast{position:absolute;z-index:9;pointer-events:none;font-size:12px;font-weight:1000;background:#000c;padding:3px 6px;border-radius:8px;transform:translate(-50%,-100%);animation:toast .8s ease forwards}
 @keyframes toast{100%{opacity:0;transform:translate(-50%,-160%)}}
@@ -52,6 +52,15 @@ input{width:100%;margin:16px 0 10px;padding:14px 16px;border-radius:12px;border:
 .stride{min-height:82px;border:1px solid #ffffff22;border-radius:16px;background:#e6bf47;color:#111;font-weight:1000;font-size:25px;box-shadow:0 7px 0 #9d8128;touch-action:manipulation;user-select:none;-webkit-user-select:none}
 .stride:active,.stride.pressed{transform:translateY(5px);box-shadow:0 2px 0 #9d8128}
 .stride:disabled,.attack:disabled{opacity:.28;cursor:not-allowed;box-shadow:none}
+
+.target-panel{max-width:900px;margin:10px auto 8px}
+.target-title{text-align:center;font-size:13px;opacity:.72;margin-bottom:6px}
+.target-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:6px}
+.target-btn{min-width:0;padding:10px 3px;border:1px solid #ffffff20;border-radius:10px;background:#306da3;color:#fff;font-weight:900;touch-action:manipulation}
+.target-btn:disabled{opacity:.26;cursor:not-allowed}
+.nuke{min-height:82px;border:1px solid #ffffff22;border-radius:16px;background:#6b3ba0;color:#fff;font-weight:1000;font-size:16px;touch-action:manipulation}
+.nuke:disabled{opacity:.25;cursor:not-allowed}
+
 .control-hint{text-align:center;font-size:13px;opacity:.68;margin-bottom:12px;line-height:1.5}
 .lobby-actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
 .ready-btn,.reset-btn{border:1px solid var(--line);border-radius:12px;padding:11px 15px;font-weight:800;color:#fff;background:#27313d}
@@ -63,10 +72,20 @@ input{width:100%;margin:16px 0 10px;padding:14px 16px;border-radius:12px;border:
 .countdown{position:fixed;inset:0;z-index:20;display:grid;place-items:center;background:#000a;font-size:min(26vw,160px);font-weight:1000;text-shadow:0 8px 30px #000}
 .fall-banner{position:fixed;left:50%;top:18%;transform:translateX(-50%);z-index:18;background:#8f2e2e;padding:12px 18px;border-radius:12px;font-size:22px;font-weight:1000}
 @media(max-width:700px){
+  .target-grid{grid-template-columns:repeat(5,1fr)}
   .app{padding:10px}.lane{height:42px}.runner{top:18px;font-size:20px}.lane-name{font-size:10px;max-width:125px}
   .controls-grid{grid-template-columns:58px minmax(0,1fr) 58px;gap:6px;position:sticky;bottom:8px;z-index:10}
   .stride{min-height:92px;font-size:20px}.attack{min-height:44px;font-size:20px;padding:8px}
-  .control-hint{font-size:12px}
+  
+.target-panel{max-width:900px;margin:10px auto 8px}
+.target-title{text-align:center;font-size:13px;opacity:.72;margin-bottom:6px}
+.target-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:6px}
+.target-btn{min-width:0;padding:10px 3px;border:1px solid #ffffff20;border-radius:10px;background:#306da3;color:#fff;font-weight:900;touch-action:manipulation}
+.target-btn:disabled{opacity:.26;cursor:not-allowed}
+.nuke{min-height:82px;border:1px solid #ffffff22;border-radius:16px;background:#6b3ba0;color:#fff;font-weight:1000;font-size:16px;touch-action:manipulation}
+.nuke:disabled{opacity:.25;cursor:not-allowed}
+
+.control-hint{font-size:12px}
 }
 </style>
 </head>
@@ -89,7 +108,7 @@ input{width:100%;margin:16px 0 10px;padding:14px 16px;border-radius:12px;border:
       <div class="badge"><strong id="playerCount">0</strong>/10 Players</div>
       <div id="stateLabel" class="badge">Lobby</div>
       <div id="streakLabel" class="badge">🎯 Streak: 0/3</div>
-      <div id="blockerLabel" class="badge">🛡️ Blockers: 0</div>
+      <div id="shieldLabel" class="badge">🛡️ Shield: 0/3</div>
     </div>
     <div class="right-meta">
       <div id="hostLabel" class="badge host-badge">👑 Host</div>
@@ -110,7 +129,7 @@ input{width:100%;margin:16px 0 10px;padding:14px 16px;border-radius:12px;border:
 
     <div class="strides">
       <button id="leftBtn" class="stride" disabled>← LEFT</button>
-      <button id="throwBtn" class="throw" disabled>🏈 THROW<br><small>SPACE</small></button>
+      <button id="nukeBtn" class="nuke" disabled>☢️ NUKE BALL<br><small>N</small></button>
       <button id="rightBtn" class="stride" disabled>RIGHT →</button>
     </div>
 
@@ -120,11 +139,16 @@ input{width:100%;margin:16px 0 10px;padding:14px 16px;border-radius:12px;border:
     </div>
   </div>
 
+  <div class="target-panel">
+    <div class="target-title">🏈 TARGET THROW — keyboard 1–9, and 0 targets runner #10</div>
+    <div id="targetGrid" class="target-grid"></div>
+  </div>
+
   <div class="control-hint">
     <strong>← →</strong> alternate to run &nbsp;•&nbsp;
-    <strong>↑ ↓</strong> hit the runner in the adjacent lane when you're within 3 yards.<br>
-    First hit wins. Truly simultaneous hits cancel each other.<br>
-    <strong>SPACE</strong> throws at the nearest racer within 12 yards. Hit the same racer 3 consecutive times to earn a blocker.
+    <strong>↑ ↓</strong> hit an adjacent runner when you're within 3 yards.<br>
+    <strong>1–9</strong> throw at runners #1–#9; <strong>0</strong> targets runner #10. Throws have a 3-second cooldown and an 18-yard range.<br>
+    Hit the same runner 3 consecutive times to earn a <strong>3-hit shield</strong>. At about 30 seconds, last place gets the <strong>Nuke Ball</strong>; press <strong>N</strong>.
   </div>
 
   <div class="lobby-actions">

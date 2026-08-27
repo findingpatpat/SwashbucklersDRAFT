@@ -19,7 +19,7 @@ const errorEl = $("error");
 const playerCount = $("playerCount");
 const stateLabel = $("stateLabel");
 const streakLabel = $("streakLabel");
-const blockerLabel = $("blockerLabel");
+const shieldLabel = $("shieldLabel");
 const hostLabel = $("hostLabel");
 const message = $("message");
 const track = $("track");
@@ -27,7 +27,8 @@ const leftBtn = $("leftBtn");
 const rightBtn = $("rightBtn");
 const upBtn = $("upBtn");
 const downBtn = $("downBtn");
-const throwBtn = $("throwBtn");
+const nukeBtn = $("nukeBtn");
+const targetGrid = $("targetGrid");
 const readyBtn = $("readyBtn");
 const startBtn = $("startBtn");
 const resetBtn = $("resetBtn");
@@ -71,10 +72,21 @@ function attemptAttack(direction) {
   socket.emit("attack", direction);
 }
 
-function attemptThrow() {
+function throwAt(number) {
   if (!canAct()) return;
-  flash(throwBtn);
-  socket.emit("throwFootball");
+  const p = me();
+  if (p?.lane === number) {
+    message.textContent = "You can't throw at yourself.";
+    return;
+  }
+  socket.emit("throwFootballAt", number);
+}
+
+function useNuke() {
+  const p = me();
+  if (!canAct() || !p?.hasNuke) return;
+  flash(nukeBtn);
+  socket.emit("useNuke");
 }
 
 function flash(btn) {
@@ -94,7 +106,7 @@ leftBtn.addEventListener("pointerdown", e => { e.preventDefault(); attemptStride
 rightBtn.addEventListener("pointerdown", e => { e.preventDefault(); attemptStride("right"); });
 upBtn.addEventListener("pointerdown", e => { e.preventDefault(); attemptAttack("up"); });
 downBtn.addEventListener("pointerdown", e => { e.preventDefault(); attemptAttack("down"); });
-throwBtn.addEventListener("pointerdown", e => { e.preventDefault(); attemptThrow(); });
+nukeBtn.addEventListener("pointerdown", e => { e.preventDefault(); useNuke(); });
 
 window.addEventListener("keydown", e => {
   if (e.repeat) return;
@@ -111,9 +123,15 @@ window.addEventListener("keydown", e => {
   } else if (e.key === "ArrowDown") {
     e.preventDefault();
     attemptAttack("down");
-  } else if (e.code === "Space") {
+  } else if (/^[1-9]$/.test(e.key)) {
     e.preventDefault();
-    attemptThrow();
+    throwAt(Number(e.key));
+  } else if (e.key === "0") {
+    e.preventDefault();
+    throwAt(10);
+  } else if (e.key.toLowerCase() === "n") {
+    e.preventDefault();
+    useNuke();
   }
 });
 
@@ -163,21 +181,50 @@ socket.on("footballThrown", e => {
   animateFootball(e.shooterId, e.targetId, e.travelMs);
 });
 
+socket.on("throwCooldown", e => {
+  message.textContent = `🏈 Throw recharging: ${(e.remainingMs / 1000).toFixed(1)}s`;
+});
+
+socket.on("nukeAwarded", e => {
+  if (e.playerId === myId) {
+    message.textContent = "☢️ NUKE BALL AWARDED! You're last at halfway — press N.";
+    showToast(e.playerId, "☢️ NUKE READY!");
+  } else {
+    message.textContent = `☢️ ${e.playerName} has the Nuke Ball!`;
+  }
+});
+
+socket.on("nukeUsed", e => {
+  message.textContent = `☢️ ${e.playerName} fired the NUKE BALL — everyone else is stunned for 3 seconds!`;
+  if (e.playerId !== myId) {
+    localLastInput = null;
+    fallBanner.classList.remove("hidden");
+    fallBanner.textContent = "☢️ NUKE STUN!";
+    setTimeout(() => {
+      fallBanner.classList.add("hidden");
+      fallBanner.textContent = "💥 YOU'RE DOWN!";
+    }, 1200);
+  }
+});
+
 socket.on("footballMiss", e => {
-  if (e.shooterId === myId) message.textContent = e.reason === "no_target" ? "No racer is within throwing range." : "Your target moved out of range.";
+  if (e.shooterId !== myId) return;
+  if (e.reason === "out_of_range") message.textContent = "That runner is outside your 18-yard throwing range.";
+  else if (e.reason === "invalid_target") message.textContent = "That runner isn't an available target.";
+  else message.textContent = "Pass missed.";
 });
 
 socket.on("footballBlocked", e => {
-  showToast(e.targetId, "🛡️ BLOCKED!");
+  showToast(e.targetId, `🛡️ BLOCKED · ${e.shieldHitsLeft} LEFT`);
   message.textContent = `${e.targetName}'s blocker intercepted ${e.shooterName}'s football!`;
 });
 
 socket.on("footballHit", e => {
   showToast(e.targetId, "🏈 HIT!");
   if (e.targetId === myId) localLastInput = null;
-  if (e.earnedBlocker) {
-    showToast(e.shooterId, "🛡️ BLOCKER!");
-    message.textContent = `${e.shooterName} hit ${e.targetName} 3 times in a row and earned a blocker!`;
+  if (e.earnedShield) {
+    showToast(e.shooterId, "🛡️ 3-HIT SHIELD!");
+    message.textContent = `${e.shooterName} hit ${e.targetName} 3 times in a row and earned a 3-hit shield!`;
   } else {
     message.textContent = `${e.shooterName} hit ${e.targetName} with a football!`;
   }
@@ -292,7 +339,7 @@ function renderStatic() {
     state.raceState === "racing" ? "Racing" : "Finished";
   hostLabel.textContent = host ? `👑 Host: ${host.name}` : "👑 Host";
   streakLabel.textContent = `🎯 Streak: ${mine?.streakCount || 0}/3`;
-  blockerLabel.textContent = `🛡️ Blockers: ${mine?.blockers || 0}`;
+  shieldLabel.textContent = `🛡️ Shield: ${mine?.shieldHits || 0}/3`;
 
   const sorted = [...state.players].sort((a,b) => a.lane-b.lane);
   const existing = new Map([...track.querySelectorAll(".lane")].map(el => [el.dataset.id, el]));
@@ -309,7 +356,7 @@ function renderStatic() {
       lane.dataset.id = p.id;
       lane.innerHTML = `
         <div class="lane-name"></div>
-        <div class="blockers"></div>
+        <div class="shield"></div>
         <div class="runner">🏃</div>
         <div class="finish"></div>
         <div class="place hidden"></div>`;
@@ -327,7 +374,7 @@ function renderStatic() {
 
     const runner = lane.querySelector(".runner");
     runner.classList.toggle("fallen", !!p.fallen);
-    lane.querySelector(".blockers").textContent = p.blockers > 0 ? "🧱".repeat(p.blockers) : "";
+    lane.querySelector(".shield").textContent = p.shieldHits > 0 ? `🛡️${p.shieldHits}` : "";
 
     const place = lane.querySelector(".place");
     if (p.place) {
@@ -360,7 +407,9 @@ function renderStatic() {
   rightBtn.disabled = !active;
   upBtn.disabled = !active;
   downBtn.disabled = !active;
-  throwBtn.disabled = !active;
+  nukeBtn.disabled = !(active && mine?.hasNuke);
+  nukeBtn.textContent = mine?.hasNuke ? "☢️ NUKE READY · N" : "☢️ NUKE BALL · N";
+  renderTargets();
 
   results.innerHTML = state.finishOrder.length
     ? `<h3>🏆 Draft Order</h3>` +
@@ -370,6 +419,31 @@ function renderStatic() {
           <span>${escapeHtml(r.name)}</span>
         </div>`).join("")
     : "";
+}
+
+
+function renderTargets() {
+  if (!state) return;
+  const active = canAct();
+  targetGrid.innerHTML = "";
+
+  for (let i = 1; i <= 10; i++) {
+    const p = state.players.find(x => x.lane === i);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "target-btn";
+    btn.textContent = p ? `#${i} ${p.name}` : `#${i} —`;
+    btn.title = i === 10 ? "Keyboard: 0" : `Keyboard: ${i}`;
+
+    if (!p || p.id === myId || p.finished || !active) btn.disabled = true;
+
+    btn.addEventListener("pointerdown", e => {
+      e.preventDefault();
+      throwAt(i);
+    });
+
+    targetGrid.appendChild(btn);
+  }
 }
 
 function handleCountdown() {
@@ -407,8 +481,8 @@ function animationLoop() {
       if (runner) {
         const pct = 2.5 + (Math.min(100, visual) / 100) * 94;
         runner.style.left = `${pct}%`;
-        const blockers = lane?.querySelector(".blockers");
-        if (blockers) blockers.style.left = `${Math.max(2.5, pct - 3)}%`;
+        const shield = lane?.querySelector(".shield");
+        if (shield) shield.style.left = `${Math.max(2.5, pct - 3)}%`;
       }
     }
   }
