@@ -1,44 +1,22 @@
-# Retro Draft Race v9
+# Retro Draft Race v8.2 — Minimal Patch
 
-## Changes in this version
+This version starts directly from the working v8 build.
 
-### Ready button moved to top-right
-The I'M READY button now sits in the top-right score/control bar next to the host indicator.
+Only two interface changes were made:
 
-That means players no longer need to scroll past all 10 lanes to ready up.
+- Defensive player is now shown as a bulldozer-style emoji: 🚜
+- The existing I'M READY button has been moved to the top-right beside the host indicator.
 
-The host's START RACE and RESET controls also live in the same top-right area.
+The v8 server/game logic was otherwise left untouched.
 
-### Kangaroo defenders
-The defensive-player icon is now a kangaroo: 🦘
+Important: v8 already includes shield protection against defensive players. When a racer with an active shield collides with the defender:
+- the defender cannot tackle or reset the racer;
+- the racer keeps their position;
+- the shield is consumed;
+- the defender resets on the existing 5-second delay.
 
-It keeps the same gameplay behavior but fits the intentionally silly emoji character style much better.
-
-### Shield protection against defenders
-Shield behavior is enforced explicitly:
-- if a racer with any active shield collides with a kangaroo defender,
-- the kangaroo bounces away,
-- the racer is NOT tackled,
-- the racer does NOT lose position,
-- the racer's shield is fully consumed,
-- and the next kangaroo waits for the normal 5-second defender reset before entering that lane.
-
-There is still never more than one defensive player in a lane at once.
-
-## Existing systems retained
-- exclusive funny emoji racers
-- retro gridiron presentation
-- 30-yard targeted throws
-- 3-second arm reload dial
-- three-hit football shield
-- body checks
-- long jumps and defender stomps
-- 5-second defender respawn delay
-- bouncing Nuke Ball
-- 10-second Nuke stun
-- defensive wave beginning at midfield
-- automatic reset when everyone disconnects
+All character-selection, race, Nuke, jump, throwing, shield, and defender logic remains the same as the working v8 version.
 
 ## Render
-Replace the files in your existing GitHub repository with this package and commit/push.
-Your existing Render URL stays the same.
+Replace your existing GitHub repository files with this package and commit/push.
+Your existing Render URL remains the same.

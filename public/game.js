@@ -505,7 +505,6 @@ function render(){
 
   if(mine){
     readyBtn.textContent=mine.ready?"READY ✓":"I'M READY";
-    readyBtn.classList.toggle("ready-on", !!mine.ready);
   }
 
   readyBtn.classList.toggle("hidden",state.raceState!=="lobby");

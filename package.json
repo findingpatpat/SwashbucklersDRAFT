@@ -1,8 +1,8 @@
 {
   "name": "online-100-yard-draft-race-v6",
-  "version": "9.0.0",
+  "version": "8.2.0",
   "private": true,
-  "description": "Retro emoji draft race with top-ready controls and kangaroo defenders",
+  "description": "Stable v8 with bulldozer defender and top-right ready button",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

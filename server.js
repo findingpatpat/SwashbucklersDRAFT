@@ -259,8 +259,8 @@ function startDefenseWave(){
           continue;
         }
 
-        // Shield completely protects the racer from a defensive-player collision.
-        // The kangaroo bounces away, the racer keeps their position, and the shield is consumed.
+        // If the racer has any shield remaining, the defender bounces off.
+        // The entire shield is consumed by the collision, and the defender resets.
         if (p.fallenUntil <= now && p.shieldHits > 0) {
           p.shieldHits = 0;
           p.defenderAlive = false;
