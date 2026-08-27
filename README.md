@@ -1,52 +1,78 @@
-# 100 Yard Draft Race v5
+# Retro Draft Race v6
 
-## Controls
-- LEFT / RIGHT arrows: alternate to run.
-- UP / DOWN arrows: body-check the runner in the adjacent lane.
-- Number keys 1–9: throw at racers #1–#9.
-- Number key 0: throw at racer #10.
-- On mobile, use the numbered target buttons #1–#10.
-- N: launch the Nuke Ball if you have it.
+This build adds the larger gameplay/visual pass requested.
+
+## Visual direction
+The presentation is an original retro pixel-football look inspired by classic 8/16-bit sports games:
+- football gridiron
+- pixel racers
+- pixel defenders
+- crowd strip
+- blocky score UI
+- pixel-style controls and animation
+
+No external game art or copied character assets are used.
+
+## Character selection
+Players first enter their name, then choose one of 10 exclusive humorous characters:
+1. The Fridge
+2. Uncle Rico
+3. Grill Dad
+4. Fourth-Down Wizard
+5. Suspicious Mascot
+6. Coach Cargo Shorts
+7. Halftime Hotdog
+8. Practice Squad Intern
+9. Discount GOAT
+10. Overconfident Kicker
+
+Once a character is selected by a connected racer, it is unavailable to everyone else.
 
 ## Targeted football throws
-Each player keeps the number of their lane, #1 through #10.
+- Player numbers remain lane numbers 1–10.
+- Keyboard 1–9 targets racers #1–#9.
+- Keyboard 0 targets racer #10.
+- Throwing range increased to 30 yards.
+- Throw cooldown remains 3 seconds.
+- A circular ARM RELOAD dial shows cooldown progress.
+- Three consecutive hits on the same racer still earns a shield.
+- Shield absorbs 3 football hits.
 
-Football throws have:
-- 18-yard range.
-- 3-second cooldown.
-- A visible traveling football.
-- A short stumble on a successful unblocked hit.
+## Nuke ball
+The Nuke unlock condition is now dynamic:
+- once MORE THAN HALF the racers have crossed the 50-yard line,
+- every unfinished racer still behind the 50 gets access to a Nuke Ball,
+- each qualifying racer can receive one,
+- it can only be fired while the owner is standing/running.
 
-Hit the SAME player three consecutive successful times to earn a shield.
-A miss, an out-of-range attempt, or a blocked football breaks the streak.
+When fired:
+- the Nuke visually chains from the owner to the nearest lane target,
+- then bounces runner-to-runner,
+- every other unfinished racer is eventually hit,
+- each victim is stunned for 10 seconds,
+- the Nuke owner remains active and can continue running.
 
-## Shield
-The reward for a three-hit streak is one shield with 3 hit points.
+## Defensive wave / obstacles
+When the first racer crosses midfield:
+- a defensive player appears in every lane,
+- defenders move slowly from right to left,
+- touching one while not jumping sends that racer back to the start line.
 
-The next three incoming football hits are blocked, one shield point at a time.
-The Nuke Ball ignores shields.
+Players can avoid the defender in two ways:
+- SPACE / JUMP: jump over the defender
+- F / THROW AHEAD: use your football throw to remove the defender if it is within 16 yards
 
-## Adjacent-lane body check
-UP and DOWN body-check the lane directly above or below.
+Throw Ahead uses the same 3-second arm cooldown as throws at other racers.
+A destroyed defender returns later so the lane does not stay permanently clear.
 
-You must be within 3 yards of the adjacent runner.
-A successful hit knocks the other racer down for 2.6 seconds.
-If both racers attack one another inside the simultaneous clash window, neither falls.
+## Existing controls
+- LEFT / RIGHT: alternate to run
+- UP / DOWN: body-check adjacent lanes
+- 1–9 / 0: targeted football throws
+- SPACE: jump
+- F: throw forward at lane defender
+- N: use Nuke Ball
 
-## Nuke Ball
-About 30 seconds after GO — halfway through the intended ~60-second race — the server finds the unfinished racer currently in last place.
-
-That racer receives one Nuke Ball.
-
-Press N or the purple on-screen button to use it.
-The Nuke Ball knocks down every other unfinished racer and stuns them for 3 seconds.
-The player who fires it is not stunned.
-It can only be awarded/used once per race.
-
-## Session reset
-When the last player disconnects, the server completely resets.
-The first player to return becomes host.
-
-## Render update
-Replace the existing files in your GitHub repository with this version and commit/push.
-Your existing Render service and URL can remain unchanged.
+## Render deployment
+Replace the files in your existing GitHub repository with the contents of this package and commit/push.
+Your existing Render service and public URL can remain unchanged.

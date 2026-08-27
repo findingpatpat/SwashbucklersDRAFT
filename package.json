@@ -1,8 +1,8 @@
 {
-  "name": "online-100-yard-draft-race-v5",
-  "version": "5.0.0",
+  "name": "online-100-yard-draft-race-v6",
+  "version": "6.0.0",
   "private": true,
-  "description": "10-player online draft race with targeted throws, 3-hit shields, longer knockdowns, and Nuke Ball",
+  "description": "Retro pixel-football 10-player online draft race",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

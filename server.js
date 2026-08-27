@@ -10,39 +10,61 @@ const PORT = process.env.PORT || 3000;
 const MAX_PLAYERS = 10;
 const DISTANCE = 100;
 
-// Race pacing: 250 valid alternating LEFT/RIGHT strides = 100 yards.
-// At ~4 valid strides/sec this is about 62.5 seconds without knockdowns.
 const STEP_YARDS = 0.40;
 const MIN_PRESS_INTERVAL_MS = 55;
 const COUNTDOWN_MS = 3200;
 const SNAPSHOT_MS = 80;
 
-// Contact rules.
-const HIT_RANGE_YARDS = 3.0;       // Must be within 3 yards longitudinally.
-const CLASH_WINDOW_MS = 140;       // Opposite attacks inside this window cancel.
-const ATTACK_COOLDOWN_MS = 650;    // Prevents attack-key spam.
-const FALL_DURATION_MS = 2600;     // Fallen runner cannot stride/attack.
-const FALL_SETBACK_YARDS = 1.2;    // Small setback so a hit matters.
+// Player contact
+const HIT_RANGE_YARDS = 4.0;
+const ATTACK_COOLDOWN_MS = 850;
+const CLASH_WINDOW_MS = 140;
+const BODY_CHECK_FALL_MS = 2800;
 
-// Football rules.
-const THROW_RANGE_YARDS = 18.0;
+// Targeted footballs
+const THROW_RANGE_YARDS = 30.0;
 const THROW_COOLDOWN_MS = 3000;
-const THROW_TRAVEL_MS = 320;
-const BALL_STUMBLE_MS = 500;
+const THROW_TRAVEL_MS = 420;
+const BALL_STUMBLE_MS = 650;
+
+// Shield
 const SHIELD_HITS = 3;
-const NUKE_AWARD_DELAY_MS = 30000;
-const NUKE_STUN_MS = 3000;
+
+// Nuke
+const NUKE_STUN_MS = 10000;
+const NUKE_HIT_GAP_MS = 340;
+const NUKE_CHAIN_START_MS = 400;
+
+// Defense wave
+const DEFENDER_SPEED_YPS = 1.65;
+const DEFENDER_HIT_RANGE = 1.25;
+const DEFENDER_RESPAWN_X = 103;
+const JUMP_DURATION_MS = 900;
+const FORWARD_THROW_RANGE = 16;
+
+const CHARACTERS = [
+  { id:"fridge", name:"The Fridge", icon:"▣", jersey:"#e9ecef", skin:"#c98c65", accent:"#495057" },
+  { id:"uncle", name:"Uncle Rico", icon:"R", jersey:"#f59f00", skin:"#d7a477", accent:"#7f5539" },
+  { id:"dad", name:"Grill Dad", icon:"G", jersey:"#f03e3e", skin:"#b97850", accent:"#212529" },
+  { id:"wizard", name:"Fourth-Down Wizard", icon:"W", jersey:"#7048e8", skin:"#d6a77a", accent:"#ffd43b" },
+  { id:"mascot", name:"Suspicious Mascot", icon:"M", jersey:"#12b886", skin:"#8fbc8f", accent:"#0b7285" },
+  { id:"coach", name:"Coach Cargo Shorts", icon:"C", jersey:"#1971c2", skin:"#d3a06d", accent:"#74c0fc" },
+  { id:"hotdog", name:"Halftime Hotdog", icon:"H", jersey:"#e8590c", skin:"#f4a261", accent:"#ffd43b" },
+  { id:"intern", name:"Practice Squad Intern", icon:"I", jersey:"#868e96", skin:"#c68b59", accent:"#dee2e6" },
+  { id:"goat", name:"Discount GOAT", icon:"D", jersey:"#212529", skin:"#b08968", accent:"#f8f9fa" },
+  { id:"kicker", name:"Overconfident Kicker", icon:"K", jersey:"#c2255c", skin:"#d1a17b", accent:"#ffa8a8" }
+];
 
 app.use(express.static("public"));
 
 let hostId = null;
-let raceState = "lobby"; // lobby | countdown | racing | finished
+let raceState = "lobby";
 let raceStartAt = null;
 let finishOrder = [];
-let nukeAwardTimer = null;
-const players = new Map();
+let defenseActive = false;
+let defenseTimer = null;
 
-// Pending attacks are held briefly so the server can detect a truly simultaneous clash.
+const players = new Map();
 const pendingAttacks = new Map();
 
 function cleanName(name) {
@@ -51,511 +73,599 @@ function cleanName(name) {
 
 function nextLane() {
   const used = new Set([...players.values()].map(p => p.lane));
-  for (let i = 1; i <= MAX_PLAYERS; i++) if (!used.has(i)) return i;
+  for (let i=1;i<=MAX_PLAYERS;i++) if (!used.has(i)) return i;
   return MAX_PLAYERS;
 }
 
-function isFallen(p, now = Date.now()) {
-  return p.fallenUntil > now;
+function characterById(id) {
+  return CHARACTERS.find(c => c.id === id) || null;
 }
 
-function payload() {
+function characterTaken(id) {
+  return [...players.values()].some(p => p.characterId === id);
+}
+
+function initRacePlayer(p) {
+  p.distance = 0;
+  p.finished = false;
+  p.place = null;
+  p.lastInput = null;
+  p.lastPress = 0;
+  p.lastAttackAt = 0;
+  p.fallenUntil = 0;
+  p.lastThrowAt = 0;
+  p.streakTargetId = null;
+  p.streakCount = 0;
+  p.shieldHits = 0;
+  p.hasNuke = false;
+  p.usedNuke = false;
+  p.isJumpingUntil = 0;
+  p.defenderX = DEFENDER_RESPAWN_X;
+  p.defenderAlive = true;
+}
+
+function statePayload() {
   const now = Date.now();
   return {
     hostId,
     raceState,
     raceStartAt,
     maxPlayers: MAX_PLAYERS,
-    rules: {
-      hitRangeYards: HIT_RANGE_YARDS,
-      fallDurationMs: FALL_DURATION_MS
-    },
+    defenseActive,
+    throwCooldownMs: THROW_COOLDOWN_MS,
+    throwRangeYards: THROW_RANGE_YARDS,
+    characters: CHARACTERS.map(c => ({
+      ...c,
+      taken: characterTaken(c.id)
+    })),
     players: [...players.values()].map(p => ({
-      id: p.id,
-      name: p.name,
-      lane: p.lane,
-      distance: p.distance,
-      ready: p.ready,
-      finished: p.finished,
-      place: p.place,
-      fallenUntil: p.fallenUntil,
-      fallen: isFallen(p, now),
-      shieldHits: p.shieldHits,
-      streakTargetId: p.streakTargetId,
-      streakCount: p.streakCount,
-      hasNuke: p.hasNuke,
-      usedNuke: p.usedNuke
+      id:p.id, name:p.name, lane:p.lane, distance:p.distance, ready:p.ready,
+      finished:p.finished, place:p.place,
+      isFallen:p.fallenUntil > now, fallenUntil:p.fallenUntil,
+      streakTargetId:p.streakTargetId, streakCount:p.streakCount,
+      shieldHits:p.shieldHits,
+      hasNuke:p.hasNuke, usedNuke:p.usedNuke,
+      isJumping:p.isJumpingUntil > now,
+      defenderX:p.defenderX, defenderAlive:p.defenderAlive,
+      characterId:p.characterId
     })),
     finishOrder
   };
 }
 
-function broadcastState() {
-  io.emit("state", payload());
-}
+function broadcastState(){ io.emit("state", statePayload()); }
 
-function clearPendingAttacks() {
-  for (const pending of pendingAttacks.values()) clearTimeout(pending.timer);
+function clearPendingAttacks(){
+  for (const a of pendingAttacks.values()) clearTimeout(a.timer);
   pendingAttacks.clear();
 }
 
-function resetRace() {
+function stopDefenseTimer(){
+  if (defenseTimer) clearInterval(defenseTimer);
+  defenseTimer = null;
+}
+
+function resetRace(){
   clearPendingAttacks();
-  clearNukeTimer();
+  stopDefenseTimer();
+  defenseActive = false;
   raceState = "lobby";
   raceStartAt = null;
   finishOrder = [];
-
   for (const p of players.values()) {
-    p.distance = 0;
+    initRacePlayer(p);
     p.ready = false;
-    p.finished = false;
-    p.place = null;
-    p.lastInput = null;
-    p.lastPress = 0;
-    p.lastAttack = 0;
-    p.fallenUntil = 0;
-    p.lastThrow = 0;
-    p.streakTargetId = null;
-    p.streakCount = 0;
-    p.shieldHits = 0;
-    p.hasNuke = false;
-    p.usedNuke = false;
   }
-
   broadcastState();
 }
 
-function fullResetWhenEmpty() {
+function hardResetEmptyServer(){
   clearPendingAttacks();
-  clearNukeTimer();
+  stopDefenseTimer();
+  defenseActive = false;
   hostId = null;
   raceState = "lobby";
   raceStartAt = null;
   finishOrder = [];
 }
 
-function adjacentTarget(attacker, direction) {
-  const targetLane = direction === "up" ? attacker.lane - 1 : attacker.lane + 1;
-  return [...players.values()].find(p =>
-    p.lane === targetLane &&
-    !p.finished &&
-    Math.abs(p.distance - attacker.distance) <= HIT_RANGE_YARDS
-  );
+function adjacentTarget(attacker, direction){
+  const lane = direction === "up" ? attacker.lane-1 : attacker.lane+1;
+  return [...players.values()].find(p => p.lane===lane && !p.finished) || null;
 }
 
-function oppositeDirection(direction) {
-  return direction === "up" ? "down" : "up";
+function playerByNumber(n){
+  return [...players.values()].find(p => p.lane===n) || null;
 }
 
-function attackKey(attackerId, targetId) {
-  return `${attackerId}->${targetId}`;
-}
-
-function resolveAttack(attackerId, targetId, direction, createdAt) {
-  const key = attackKey(attackerId, targetId);
-  const pending = pendingAttacks.get(key);
-  if (!pending || pending.createdAt !== createdAt) return;
-  pendingAttacks.delete(key);
-
+function checkNukeEligibility(){
   if (raceState !== "racing") return;
 
-  const attacker = players.get(attackerId);
-  const target = players.get(targetId);
+  const contestants = [...players.values()];
+  if (!contestants.length) return;
+
+  const crossed = contestants.filter(p => p.distance >= 50 || p.finished).length;
+  const threshold = Math.floor(contestants.length / 2) + 1;
+
+  if (crossed >= threshold) {
+    let changed = false;
+    for (const p of contestants) {
+      if (!p.finished && p.distance < 50 && !p.usedNuke && !p.hasNuke) {
+        p.hasNuke = true;
+        changed = true;
+        io.to(p.id).emit("nukeAwarded", { playerId:p.id, playerName:p.name });
+      }
+    }
+    if (changed) broadcastState();
+  }
+}
+
+function startDefenseWave(){
+  if (defenseActive) return;
+  defenseActive = true;
+
+  for (const p of players.values()) {
+    p.defenderX = DEFENDER_RESPAWN_X;
+    p.defenderAlive = true;
+  }
+
+  io.emit("defenseWave", {});
+  broadcastState();
+
+  let last = Date.now();
+  defenseTimer = setInterval(() => {
+    if (raceState !== "racing") return;
+    const now = Date.now();
+    const dt = Math.min((now-last)/1000, .15);
+    last = now;
+
+    for (const p of players.values()) {
+      if (p.finished || !p.defenderAlive) continue;
+
+      p.defenderX -= DEFENDER_SPEED_YPS * dt;
+
+      if (p.defenderX < -3) {
+        p.defenderX = DEFENDER_RESPAWN_X;
+      }
+
+      if (
+        p.fallenUntil <= now &&
+        p.isJumpingUntil <= now &&
+        Math.abs(p.defenderX - p.distance) <= DEFENDER_HIT_RANGE
+      ) {
+        p.distance = 0;
+        p.lastInput = null;
+        p.fallenUntil = now + 1200;
+        p.defenderX = DEFENDER_RESPAWN_X;
+
+        io.emit("defenderTackle", {
+          playerId:p.id,
+          playerName:p.name
+        });
+      }
+    }
+  }, 80);
+}
+
+function resolveAttack(attackerId){
+  const attack = pendingAttacks.get(attackerId);
+  if (!attack) return;
+  pendingAttacks.delete(attackerId);
+
+  const attacker = players.get(attack.attackerId);
+  const target = players.get(attack.targetId);
   const now = Date.now();
 
-  if (!attacker || !target || attacker.finished || target.finished) return;
-  if (isFallen(attacker, now) || isFallen(target, now)) return;
+  if (!attacker || !target || raceState!=="racing") return;
+  if (attacker.finished || target.finished || attacker.fallenUntil>now) return;
 
-  const stillAdjacent = Math.abs(attacker.lane - target.lane) === 1;
-  const stillInRange = Math.abs(attacker.distance - target.distance) <= HIT_RANGE_YARDS;
-  if (!stillAdjacent || !stillInRange) {
-    io.to(attackerId).emit("attackMiss", { reason: "out_of_range" });
+  if (Math.abs(attacker.distance-target.distance)>HIT_RANGE_YARDS) {
+    io.to(attacker.id).emit("attackMiss",{reason:"out_of_range"});
     return;
   }
 
-  target.distance = Math.max(0, target.distance - FALL_SETBACK_YARDS);
-  target.fallenUntil = now + FALL_DURATION_MS;
+  const counter = pendingAttacks.get(target.id);
+  if (
+    counter &&
+    counter.targetId===attacker.id &&
+    Math.abs(counter.createdAt-attack.createdAt)<=CLASH_WINDOW_MS
+  ) {
+    clearTimeout(counter.timer);
+    pendingAttacks.delete(target.id);
+    io.emit("clash",{a:attacker.id,b:target.id,aName:attacker.name,bName:target.name});
+    return;
+  }
+
+  target.fallenUntil = now + BODY_CHECK_FALL_MS;
   target.lastInput = null;
 
-  io.emit("knockdown", {
-    attackerId,
-    attackerName: attacker.name,
-    targetId,
-    targetName: target.name,
-    fallenUntil: target.fallenUntil
+  io.emit("knockdown",{
+    attackerId:attacker.id, attackerName:attacker.name,
+    targetId:target.id, targetName:target.name
   });
 
   broadcastState();
 }
 
-function playerByNumber(number) {
-  return [...players.values()].find(p => p.lane === number) || null;
-}
-
-function resolveFootball(shooterId, targetId, throwId) {
+function resolveFootball(shooterId,targetId,throwId){
   const shooter = players.get(shooterId);
   const target = players.get(targetId);
-  if (!shooter || !target || raceState !== "racing") return;
+  if (!shooter || !target || raceState!=="racing") return;
   if (shooter.finished || target.finished) return;
 
-  if (Math.abs(shooter.distance - target.distance) > THROW_RANGE_YARDS + 2) {
+  if (Math.abs(shooter.distance-target.distance)>THROW_RANGE_YARDS+3) {
     shooter.streakTargetId = null;
     shooter.streakCount = 0;
-    io.emit("footballMiss", { throwId, shooterId, targetId, reason: "moved" });
+    io.emit("footballMiss",{throwId,shooterId,targetId,reason:"moved"});
     broadcastState();
     return;
   }
 
-  if (target.shieldHits > 0) {
+  if (target.shieldHits>0) {
     target.shieldHits -= 1;
     shooter.streakTargetId = null;
     shooter.streakCount = 0;
-    io.emit("footballBlocked", {
-      throwId, shooterId, shooterName: shooter.name,
-      targetId, targetName: target.name,
-      shieldHitsLeft: target.shieldHits
+    io.emit("footballBlocked",{
+      throwId, shooterId, shooterName:shooter.name,
+      targetId, targetName:target.name, shieldHitsLeft:target.shieldHits
     });
     broadcastState();
     return;
   }
 
-  if (shooter.streakTargetId === targetId) shooter.streakCount += 1;
-  else { shooter.streakTargetId = targetId; shooter.streakCount = 1; }
+  if (shooter.streakTargetId===targetId) shooter.streakCount += 1;
+  else {
+    shooter.streakTargetId = targetId;
+    shooter.streakCount = 1;
+  }
 
-  target.fallenUntil = Math.max(target.fallenUntil, Date.now() + BALL_STUMBLE_MS);
+  target.fallenUntil = Math.max(target.fallenUntil,Date.now()+BALL_STUMBLE_MS);
   target.lastInput = null;
 
   let earnedShield = false;
-  if (shooter.streakCount >= 3) {
+  if (shooter.streakCount>=3) {
     shooter.shieldHits = SHIELD_HITS;
-    shooter.streakTargetId = null;
     shooter.streakCount = 0;
+    shooter.streakTargetId = null;
     earnedShield = true;
   }
 
-  io.emit("footballHit", {
-    throwId, shooterId, shooterName: shooter.name,
-    targetId, targetName: target.name,
-    streakCount: shooter.streakCount,
-    earnedShield,
-    shieldHits: shooter.shieldHits
+  io.emit("footballHit",{
+    throwId, shooterId, shooterName:shooter.name,
+    targetId, targetName:target.name,
+    streakCount:shooter.streakCount,
+    earnedShield, shieldHits:shooter.shieldHits
   });
+
   broadcastState();
 }
 
+function useNukeBall(owner){
+  const now = Date.now();
+  if (
+    raceState!=="racing" ||
+    !owner.hasNuke ||
+    owner.usedNuke ||
+    owner.fallenUntil>now ||
+    owner.finished
+  ) return;
 
-function clearNukeTimer() {
-  if (nukeAwardTimer) {
-    clearTimeout(nukeAwardTimer);
-    nukeAwardTimer = null;
-  }
-}
-
-function awardNukeBall() {
-  if (raceState !== "racing") return;
-  const active = [...players.values()].filter(p => !p.finished);
-  if (!active.length) return;
-  active.sort((a, b) => a.distance !== b.distance ? a.distance - b.distance : b.lane - a.lane);
-  const last = active[0];
-  last.hasNuke = true;
-  io.emit("nukeAwarded", { playerId: last.id, playerName: last.name });
-  broadcastState();
-}
-
-function useNukeBall(owner) {
-  if (!owner || !owner.hasNuke || owner.usedNuke || raceState !== "racing") return;
   owner.hasNuke = false;
   owner.usedNuke = true;
-  const now = Date.now();
-  for (const p of players.values()) {
-    if (p.id === owner.id || p.finished) continue;
-    p.fallenUntil = Math.max(p.fallenUntil, now + NUKE_STUN_MS);
-    p.lastInput = null;
-  }
-  io.emit("nukeUsed", { playerId: owner.id, playerName: owner.name, stunMs: NUKE_STUN_MS });
+
+  const victims = [...players.values()]
+    .filter(p => p.id!==owner.id && !p.finished)
+    .sort((a,b) => {
+      const da = Math.abs(a.lane-owner.lane);
+      const db = Math.abs(b.lane-owner.lane);
+      return da-db || a.lane-b.lane;
+    });
+
+  io.emit("nukeStarted",{
+    ownerId:owner.id,
+    ownerName:owner.name,
+    victims:victims.map(p=>({id:p.id,name:p.name,lane:p.lane})),
+    gapMs:NUKE_HIT_GAP_MS,
+    stunMs:NUKE_STUN_MS
+  });
+
+  victims.forEach((p,index) => {
+    setTimeout(() => {
+      const victim = players.get(p.id);
+      if (!victim || victim.finished) return;
+      victim.fallenUntil = Math.max(victim.fallenUntil,Date.now()+NUKE_STUN_MS);
+      victim.lastInput = null;
+      io.emit("nukeBounceHit",{
+        ownerId:owner.id,
+        victimId:victim.id,
+        victimName:victim.name,
+        index
+      });
+      broadcastState();
+    }, NUKE_CHAIN_START_MS + index*NUKE_HIT_GAP_MS);
+  });
+
   broadcastState();
 }
 
-setInterval(() => {
-  if (players.size) broadcastState();
-}, SNAPSHOT_MS);
+setInterval(()=>{ if(players.size) broadcastState(); },SNAPSHOT_MS);
 
-io.on("connection", socket => {
-  socket.on("join", rawName => {
+io.on("connection",socket=>{
+  socket.emit("characterState", {
+    characters: CHARACTERS.map(c => ({...c,taken:characterTaken(c.id)}))
+  });
+
+  socket.on("requestCharacters",()=>{
+    socket.emit("characterState", {
+      characters: CHARACTERS.map(c => ({...c,taken:characterTaken(c.id)}))
+    });
+  });
+
+  socket.on("join",payload=>{
     if (players.has(socket.id)) return;
+    if (players.size>=MAX_PLAYERS) return socket.emit("joinError","Race is full.");
+    if (raceState!=="lobby") return socket.emit("joinError","The race has already started.");
 
-    if (players.size >= MAX_PLAYERS) {
-      socket.emit("joinError", "Race is full.");
-      return;
-    }
-    if (raceState !== "lobby") {
-      socket.emit("joinError", "The race has already started.");
+    const characterId = String(payload?.characterId || "");
+    const character = characterById(characterId);
+
+    if (!character) return socket.emit("joinError","Choose a character.");
+    if (characterTaken(characterId)) {
+      socket.emit("joinError","That character was just taken. Pick another.");
+      socket.emit("characterState", {
+        characters: CHARACTERS.map(c => ({...c,taken:characterTaken(c.id)}))
+      });
       return;
     }
 
     if (!hostId) hostId = socket.id;
 
     const p = {
-      id: socket.id,
-      name: cleanName(rawName),
-      lane: nextLane(),
-      distance: 0,
-      ready: false,
-      finished: false,
-      place: null,
-      lastInput: null,
-      lastPress: 0,
-      lastAttack: 0,
-      fallenUntil: 0,
-      lastThrow: 0,
-      streakTargetId: null,
-      streakCount: 0,
-      shieldHits: 0,
-      hasNuke: false,
-      usedNuke: false
+      id:socket.id,
+      name:cleanName(payload?.name),
+      lane:nextLane(),
+      ready:false,
+      characterId
     };
 
-    players.set(socket.id, p);
-    socket.emit("joined", { id: socket.id });
-    io.emit("message", `${p.name} joined.`);
+    initRacePlayer(p);
+    players.set(socket.id,p);
+
+    socket.emit("joined",{id:socket.id});
+    io.emit("message",`${p.name} joined as #${p.lane} — ${character.name}.`);
+    io.emit("characterState", {
+      characters: CHARACTERS.map(c => ({...c,taken:characterTaken(c.id)}))
+    });
     broadcastState();
   });
 
-  socket.on("toggleReady", () => {
+  socket.on("toggleReady",()=>{
     const p = players.get(socket.id);
-    if (!p || raceState !== "lobby") return;
+    if (!p || raceState!=="lobby") return;
     p.ready = !p.ready;
     broadcastState();
   });
 
-  socket.on("startRace", () => {
-    if (socket.id !== hostId || raceState !== "lobby") return;
-
-    if (players.size < 2) {
-      socket.emit("hostError", "At least 2 players are required.");
-      return;
-    }
-    if ([...players.values()].some(p => !p.ready)) {
-      socket.emit("hostError", "Everyone who joined must be ready.");
-      return;
-    }
+  socket.on("startRace",()=>{
+    if (socket.id!==hostId || raceState!=="lobby") return;
+    if (players.size<2) return socket.emit("hostError","At least 2 players are required.");
+    if ([...players.values()].some(p=>!p.ready)) return socket.emit("hostError","Everyone who joined must be ready.");
 
     clearPendingAttacks();
+    stopDefenseTimer();
+    defenseActive = false;
     finishOrder = [];
-
-    for (const p of players.values()) {
-      p.distance = 0;
-      p.finished = false;
-      p.place = null;
-      p.lastInput = null;
-      p.lastPress = 0;
-      p.lastAttack = 0;
-      p.fallenUntil = 0;
-      p.lastThrow = 0;
-      p.streakTargetId = null;
-      p.streakCount = 0;
-      p.shieldHits = 0;
-      p.hasNuke = false;
-      p.usedNuke = false;
-    }
+    for (const p of players.values()) initRacePlayer(p);
 
     raceState = "countdown";
-    raceStartAt = Date.now() + COUNTDOWN_MS;
+    raceStartAt = Date.now()+COUNTDOWN_MS;
     broadcastState();
 
-    setTimeout(() => {
-      if (raceState === "countdown") {
+    setTimeout(()=>{
+      if (raceState==="countdown") {
         raceState = "racing";
-        io.emit("go", { at: Date.now() });
+        io.emit("go",{at:Date.now()});
         broadcastState();
-        clearNukeTimer();
-        nukeAwardTimer = setTimeout(() => {
-          nukeAwardTimer = null;
-          awardNukeBall();
-        }, NUKE_AWARD_DELAY_MS);
       }
-    }, COUNTDOWN_MS);
+    },COUNTDOWN_MS);
   });
 
-  socket.on("stride", input => {
+  socket.on("stride",input=>{
     const p = players.get(socket.id);
+    if (!p || raceState!=="racing" || p.finished) return;
+
     const now = Date.now();
+    if (p.fallenUntil>now) return;
 
-    if (!p || raceState !== "racing" || p.finished || isFallen(p, now)) return;
-
-    const kind = input === "left" ? "left" : input === "right" ? "right" : null;
-    if (!kind || p.lastInput === kind) return;
-    if (now - p.lastPress < MIN_PRESS_INTERVAL_MS) return;
+    const kind = input==="left"?"left":input==="right"?"right":null;
+    if (!kind) return;
+    if (p.lastInput===kind) return;
+    if (now-p.lastPress<MIN_PRESS_INTERVAL_MS) return;
 
     p.lastInput = kind;
     p.lastPress = now;
-    p.distance = Math.min(DISTANCE, p.distance + STEP_YARDS);
+    p.distance = Math.min(DISTANCE,p.distance+STEP_YARDS);
 
-    socket.emit("strideAck", { distance: p.distance, input: kind });
+    socket.emit("strideAck",{distance:p.distance,input:kind});
 
-    if (p.distance >= DISTANCE && !p.finished) {
+    if (!defenseActive && p.distance>=50) startDefenseWave();
+    checkNukeEligibility();
+
+    if (p.distance>=DISTANCE && !p.finished) {
       p.finished = true;
-      p.place = finishOrder.length + 1;
-      finishOrder.push({ id: p.id, name: p.name, place: p.place });
+      p.place = finishOrder.length+1;
+      finishOrder.push({id:p.id,name:p.name,place:p.place});
+      io.emit("finish",{id:p.id,name:p.name,place:p.place});
 
-      io.emit("finish", { id: p.id, name: p.name, place: p.place });
-
-      if (finishOrder.length === players.size) {
+      if (finishOrder.length===players.size) {
         raceState = "finished";
-        clearNukeTimer();
+        clearPendingAttacks();
+        stopDefenseTimer();
         broadcastState();
       }
     }
   });
 
-  socket.on("attack", rawDirection => {
+  socket.on("attack",direction=>{
     const attacker = players.get(socket.id);
+    if (!attacker || raceState!=="racing" || attacker.finished) return;
+
     const now = Date.now();
+    if (attacker.fallenUntil>now) return;
+    if (now-attacker.lastAttackAt<ATTACK_COOLDOWN_MS) return;
 
-    if (!attacker || raceState !== "racing" || attacker.finished || isFallen(attacker, now)) return;
+    const dir = direction==="up"?"up":direction==="down"?"down":null;
+    if (!dir) return;
 
-    const direction = rawDirection === "up" ? "up" : rawDirection === "down" ? "down" : null;
-    if (!direction) return;
+    const target = adjacentTarget(attacker,dir);
+    attacker.lastAttackAt = now;
 
-    if (now - attacker.lastAttack < ATTACK_COOLDOWN_MS) return;
-    attacker.lastAttack = now;
-
-    const target = adjacentTarget(attacker, direction);
-
-    if (!target) {
-      socket.emit("attackMiss", { reason: "no_target" });
-      return;
+    if (!target) return socket.emit("attackMiss",{reason:"no_runner"});
+    if (target.fallenUntil>now) return socket.emit("attackMiss",{reason:"already_down"});
+    if (Math.abs(attacker.distance-target.distance)>HIT_RANGE_YARDS) {
+      return socket.emit("attackMiss",{reason:"out_of_range"});
     }
 
-    // If the target has already attacked this runner in the opposite direction
-    // and that attack is still in the simultaneous-resolution window, cancel both.
-    const reverseKey = attackKey(target.id, attacker.id);
-    const reverse = pendingAttacks.get(reverseKey);
+    const previous = pendingAttacks.get(attacker.id);
+    if (previous) clearTimeout(previous.timer);
 
-    if (
-      reverse &&
-      reverse.direction === oppositeDirection(direction) &&
-      now - reverse.createdAt <= CLASH_WINDOW_MS
-    ) {
-      clearTimeout(reverse.timer);
-      pendingAttacks.delete(reverseKey);
+    const attack = {
+      attackerId:attacker.id,
+      targetId:target.id,
+      createdAt:now,
+      timer:null
+    };
 
-      io.emit("clash", {
-        playerAId: attacker.id,
-        playerAName: attacker.name,
-        playerBId: target.id,
-        playerBName: target.name
-      });
-
-      return;
-    }
-
-    const key = attackKey(attacker.id, target.id);
-
-    // Replace duplicate pending attack, though cooldown normally prevents this.
-    const old = pendingAttacks.get(key);
-    if (old) clearTimeout(old.timer);
-
-    const createdAt = now;
-    const timer = setTimeout(() => {
-      resolveAttack(attacker.id, target.id, direction, createdAt);
-    }, CLASH_WINDOW_MS);
-
-    pendingAttacks.set(key, {
-      attackerId: attacker.id,
-      targetId: target.id,
-      direction,
-      createdAt,
-      timer
-    });
-
-    socket.emit("attackQueued", { direction, targetId: target.id });
+    attack.timer = setTimeout(()=>resolveAttack(attacker.id),CLASH_WINDOW_MS);
+    pendingAttacks.set(attacker.id,attack);
+    socket.emit("attackQueued",{targetId:target.id,direction:dir});
   });
 
-  socket.on("throwFootballAt", rawNumber => {
+  socket.on("throwFootballAt",targetNumber=>{
     const shooter = players.get(socket.id);
+    if (!shooter || raceState!=="racing" || shooter.finished) return;
+
     const now = Date.now();
-    if (!shooter || raceState !== "racing" || shooter.finished || isFallen(shooter, now)) return;
+    if (shooter.fallenUntil>now) return;
 
-    if (now - shooter.lastThrow < THROW_COOLDOWN_MS) {
-      socket.emit("throwCooldown", { remainingMs: THROW_COOLDOWN_MS - (now - shooter.lastThrow) });
-      return;
+    if (now-shooter.lastThrowAt<THROW_COOLDOWN_MS) {
+      return socket.emit("throwCooldown",{
+        remainingMs:THROW_COOLDOWN_MS-(now-shooter.lastThrowAt)
+      });
     }
 
-    const number = Number(rawNumber);
-    if (!Number.isInteger(number) || number < 1 || number > 10) return;
+    const n = Number(targetNumber);
+    if (!Number.isInteger(n) || n<1 || n>10) return;
 
-    const target = playerByNumber(number);
-    if (!target || target.id === shooter.id || target.finished) {
-      socket.emit("footballMiss", { shooterId: shooter.id, reason: "invalid_target" });
-      return;
+    const target = playerByNumber(n);
+    if (!target || target.id===shooter.id || target.finished) {
+      return socket.emit("footballMiss",{shooterId:shooter.id,reason:"invalid_target"});
     }
 
-    if (Math.abs(target.distance - shooter.distance) > THROW_RANGE_YARDS) {
+    if (Math.abs(shooter.distance-target.distance)>THROW_RANGE_YARDS) {
       shooter.streakTargetId = null;
       shooter.streakCount = 0;
-      socket.emit("footballMiss", { shooterId: shooter.id, targetId: target.id, reason: "out_of_range" });
+      socket.emit("footballMiss",{shooterId:shooter.id,targetId:target.id,reason:"out_of_range"});
       broadcastState();
       return;
     }
 
-    shooter.lastThrow = now;
+    shooter.lastThrowAt = now;
     const throwId = `${shooter.id}-${now}`;
-    io.emit("footballThrown", {
-      throwId,
-      shooterId: shooter.id,
-      shooterName: shooter.name,
-      targetId: target.id,
-      targetName: target.name,
-      targetNumber: target.lane,
-      travelMs: THROW_TRAVEL_MS
+
+    io.emit("footballThrown",{
+      throwId, shooterId:shooter.id, shooterName:shooter.name,
+      targetId:target.id, targetName:target.name,
+      targetNumber:target.lane, travelMs:THROW_TRAVEL_MS
     });
-    setTimeout(() => resolveFootball(shooter.id, target.id, throwId), THROW_TRAVEL_MS);
+
+    setTimeout(()=>resolveFootball(shooter.id,target.id,throwId),THROW_TRAVEL_MS);
   });
 
-  socket.on("useNuke", () => {
-    useNukeBall(players.get(socket.id));
-  });
-
-  socket.on("resetRace", () => {
-    if (socket.id === hostId) resetRace();
-  });
-
-  socket.on("disconnect", () => {
+  socket.on("throwForward",()=>{
     const p = players.get(socket.id);
-    if (p) io.emit("message", `${p.name} left.`);
+    if (!p || raceState!=="racing" || p.finished || !p.defenderAlive) return;
 
-    // Remove pending attacks involving this socket.
-    for (const [key, pending] of pendingAttacks) {
-      if (pending.attackerId === socket.id || pending.targetId === socket.id) {
-        clearTimeout(pending.timer);
-        pendingAttacks.delete(key);
-      }
+    const now = Date.now();
+    if (p.fallenUntil>now) return;
+
+    if (now-p.lastThrowAt<THROW_COOLDOWN_MS) {
+      return socket.emit("throwCooldown",{remainingMs:THROW_COOLDOWN_MS-(now-p.lastThrowAt)});
+    }
+
+    if (p.defenderX < p.distance || p.defenderX-p.distance > FORWARD_THROW_RANGE) {
+      return socket.emit("forwardMiss",{reason:"out_of_range"});
+    }
+
+    p.lastThrowAt = now;
+    const start = p.distance;
+    const end = p.defenderX;
+
+    io.emit("forwardThrown",{
+      playerId:p.id, playerName:p.name, start, end, travelMs:THROW_TRAVEL_MS
+    });
+
+    setTimeout(()=>{
+      if (!players.has(p.id)) return;
+      p.defenderAlive = false;
+      io.emit("defenderDestroyed",{playerId:p.id,playerName:p.name});
+
+      setTimeout(()=>{
+        if (!players.has(p.id) || raceState!=="racing") return;
+        p.defenderX = DEFENDER_RESPAWN_X;
+        p.defenderAlive = true;
+      },7000);
+    },THROW_TRAVEL_MS);
+  });
+
+  socket.on("jump",()=>{
+    const p = players.get(socket.id);
+    if (!p || raceState!=="racing" || p.finished) return;
+    const now = Date.now();
+    if (p.fallenUntil>now || p.isJumpingUntil>now) return;
+    p.isJumpingUntil = now + JUMP_DURATION_MS;
+    io.emit("jumped",{playerId:p.id});
+  });
+
+  socket.on("useNuke",()=>{
+    const p = players.get(socket.id);
+    if (!p) return;
+    useNukeBall(p);
+  });
+
+  socket.on("resetRace",()=>{
+    if (socket.id===hostId) resetRace();
+  });
+
+  socket.on("disconnect",()=>{
+    const p = players.get(socket.id);
+    if (p) io.emit("message",`${p.name} left.`);
+
+    const attack = pendingAttacks.get(socket.id);
+    if (attack) {
+      clearTimeout(attack.timer);
+      pendingAttacks.delete(socket.id);
     }
 
     players.delete(socket.id);
 
-    if (players.size === 0) {
-      // Important: closing every browser fully resets the game for the next session.
-      fullResetWhenEmpty();
+    io.emit("characterState", {
+      characters: CHARACTERS.map(c => ({...c,taken:characterTaken(c.id)}))
+    });
+
+    if (players.size===0) {
+      hardResetEmptyServer();
       return;
     }
 
-    if (socket.id === hostId) {
+    if (socket.id===hostId) {
       hostId = [...players.keys()][0];
       const newHost = players.get(hostId);
-      io.emit("message", `${newHost.name} is now host.`);
-    }
-
-    if (raceState === "racing" && finishOrder.length >= players.size) {
-      raceState = "finished";
+      io.emit("message",`${newHost.name} is now host.`);
     }
 
     broadcastState();
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`100 Yard Draft Race v5 running on port ${PORT}`);
-});
+server.listen(PORT,()=>console.log(`Retro Draft Race v6 running on port ${PORT}`));
