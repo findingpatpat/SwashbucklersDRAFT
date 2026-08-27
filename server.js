@@ -39,7 +39,7 @@ const NUKE_CHAIN_START_MS = 400;
 const DEFENDER_SPEED_YPS = 1.65;
 const DEFENDER_HIT_RANGE = 1.25;
 const DEFENDER_RESPAWN_X = 103;
-const DEFENDER_RESPAWN_DELAY_MS = 1200;
+const DEFENDER_RESPAWN_DELAY_MS = 5000;
 const JUMP_DURATION_MS = 1800;
 const FORWARD_THROW_RANGE = 16;
 
@@ -253,6 +253,20 @@ function startDefenseWave(){
           p.defenderAlive = false;
           p.defenderRespawnAt = now + DEFENDER_RESPAWN_DELAY_MS;
           io.emit("defenderSquashed", {
+            playerId:p.id,
+            playerName:p.name
+          });
+          continue;
+        }
+
+        // Shield completely protects the racer from a defensive-player collision.
+        // The kangaroo bounces away, the racer keeps their position, and the shield is consumed.
+        if (p.fallenUntil <= now && p.shieldHits > 0) {
+          p.shieldHits = 0;
+          p.defenderAlive = false;
+          p.defenderRespawnAt = now + DEFENDER_RESPAWN_DELAY_MS;
+
+          io.emit("defenderShieldBounce", {
             playerId:p.id,
             playerName:p.name
           });

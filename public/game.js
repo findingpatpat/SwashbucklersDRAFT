@@ -298,6 +298,11 @@ socket.on("defenderTackle",e=>{
   }
 });
 
+socket.on("defenderShieldBounce",e=>{
+  showToast(e.playerId,"🛡 DEFLECT!");
+  message.textContent=`${e.playerName}'s shield bounced the defender away — shield consumed.`;
+});
+
 socket.on("jumped",e=>{
   const r=runnerFor(e.playerId);
   if(r){
@@ -500,6 +505,7 @@ function render(){
 
   if(mine){
     readyBtn.textContent=mine.ready?"READY ✓":"I'M READY";
+    readyBtn.classList.toggle("ready-on", !!mine.ready);
   }
 
   readyBtn.classList.toggle("hidden",state.raceState!=="lobby");

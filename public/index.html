@@ -143,6 +143,18 @@ h1{
   font-size:12px
 }
 .pill.gold{border-color:#ffd43b}
+
+.top-ready,.top-start,.top-reset{
+  border:2px solid #fff;
+  padding:8px 10px;
+  font-weight:900;
+  font-size:12px;
+  color:#111;
+}
+.top-ready{background:#51cf66}
+.top-start{background:#ffd43b}
+.top-reset{background:#adb5bd}
+.top-ready.ready-on{background:#2f9e44;color:#fff}
 #message{min-height:25px;font-size:12px;padding:5px 2px}
 
 .stadium{
@@ -233,20 +245,18 @@ h1{
 }
 .defender{
   position:absolute;
-  top:25px;
-  width:26px;height:25px;
+  top:16px;
+  width:34px;
+  height:34px;
   transform:translateX(-50%);
-  z-index:4
+  z-index:4;
+  font-size:29px;
+  line-height:34px;
+  text-align:center;
+  filter:drop-shadow(2px 2px 0 #000)
 }
 .defender:before{
-  content:"";
-  position:absolute;left:5px;top:4px;width:16px;height:15px;
-  background:#111;
-  border:3px solid #ff6b6b
-}
-.defender:after{
-  content:"D";
-  position:absolute;left:9px;top:5px;color:#fff;font-weight:900;font-size:12px
+  content:"🦘";
 }
 .football{
   position:absolute;
@@ -474,12 +484,6 @@ h1{
       <div class="target-title">TARGET RACER // KEYS 1–9, 0 = #10 // RANGE 30 YARDS</div>
       <div id="targetGrid" class="target-grid"></div>
     </div>
-  </div>
-
-  <div class="lobby-actions">
-    <button id="readyBtn">I'M READY</button>
-    <button id="startBtn" class="hidden">START RACE</button>
-    <button id="resetBtn" class="hidden">RESET</button>
   </div>
 
   <div id="results" class="results"></div>
