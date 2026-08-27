@@ -1,78 +1,46 @@
-# Retro Draft Race v6
+# Retro Draft Race v7
 
-This build adds the larger gameplay/visual pass requested.
+## Character overhaul
+The roster is now intentionally ridiculous and emoji-based:
+1. 👟 The Shoe
+2. 😀 Smiley Face
+3. 🐴 Horse
+4. 🐌 Turbo Snail
+5. 💩 Pile of Shit
+6. 🍌 Loose Banana
+7. 🐔 Angry Chicken
+8. 👽 Little Alien
+9. 👻 Ghost Guy
+10. 🌭 Hot Dog
 
-## Visual direction
-The presentation is an original retro pixel-football look inspired by classic 8/16-bit sports games:
-- football gridiron
-- pixel racers
-- pixel defenders
-- crowd strip
-- blocky score UI
-- pixel-style controls and animation
+Characters remain exclusive: two connected players cannot select the same one.
 
-No external game art or copied character assets are used.
+## Jump / defender changes
+- Jump duration increased from 0.9 seconds to 1.8 seconds.
+- The visual jump has a longer arc so timing is easier to read.
+- If a player jumps over a defender cleanly, they continue running.
+- If the player overlaps the defender while airborne, they land on his head and squash him.
+- A squashed defender disappears.
+- Defenders no longer instantly recycle.
+- The next defender in that lane appears only after the prior defender has fully run through / been cleared, plus a short reset delay.
+- A normal collision while not jumping still sends the racer back to the start line.
 
-## Character selection
-Players first enter their name, then choose one of 10 exclusive humorous characters:
-1. The Fridge
-2. Uncle Rico
-3. Grill Dad
-4. Fourth-Down Wizard
-5. Suspicious Mascot
-6. Coach Cargo Shorts
-7. Halftime Hotdog
-8. Practice Squad Intern
-9. Discount GOAT
-10. Overconfident Kicker
+## Existing v6 systems retained
+- 10-player online lobby
+- exclusive character selection
+- retro football field presentation
+- ~60 second base race pacing
+- 30-yard targeted football throws using 1–9 / 0
+- 3-second arm cooldown with reload dial
+- 3-hit shield reward
+- adjacent-lane body checks
+- midfield Nuke Ball eligibility and bouncing chain animation
+- 10-second Nuke stun
+- defensive wave begins when first racer crosses midfield
+- F throws ahead at lane defender
+- SPACE jumps
+- automatic server reset when everyone disconnects
 
-Once a character is selected by a connected racer, it is unavailable to everyone else.
-
-## Targeted football throws
-- Player numbers remain lane numbers 1–10.
-- Keyboard 1–9 targets racers #1–#9.
-- Keyboard 0 targets racer #10.
-- Throwing range increased to 30 yards.
-- Throw cooldown remains 3 seconds.
-- A circular ARM RELOAD dial shows cooldown progress.
-- Three consecutive hits on the same racer still earns a shield.
-- Shield absorbs 3 football hits.
-
-## Nuke ball
-The Nuke unlock condition is now dynamic:
-- once MORE THAN HALF the racers have crossed the 50-yard line,
-- every unfinished racer still behind the 50 gets access to a Nuke Ball,
-- each qualifying racer can receive one,
-- it can only be fired while the owner is standing/running.
-
-When fired:
-- the Nuke visually chains from the owner to the nearest lane target,
-- then bounces runner-to-runner,
-- every other unfinished racer is eventually hit,
-- each victim is stunned for 10 seconds,
-- the Nuke owner remains active and can continue running.
-
-## Defensive wave / obstacles
-When the first racer crosses midfield:
-- a defensive player appears in every lane,
-- defenders move slowly from right to left,
-- touching one while not jumping sends that racer back to the start line.
-
-Players can avoid the defender in two ways:
-- SPACE / JUMP: jump over the defender
-- F / THROW AHEAD: use your football throw to remove the defender if it is within 16 yards
-
-Throw Ahead uses the same 3-second arm cooldown as throws at other racers.
-A destroyed defender returns later so the lane does not stay permanently clear.
-
-## Existing controls
-- LEFT / RIGHT: alternate to run
-- UP / DOWN: body-check adjacent lanes
-- 1–9 / 0: targeted football throws
-- SPACE: jump
-- F: throw forward at lane defender
-- N: use Nuke Ball
-
-## Render deployment
-Replace the files in your existing GitHub repository with the contents of this package and commit/push.
-Your existing Render service and public URL can remain unchanged.
+## Render
+Replace the files in your existing GitHub repository with this package and commit/push.
+Your current Render service and URL can remain unchanged.

@@ -1,8 +1,8 @@
 {
   "name": "online-100-yard-draft-race-v6",
-  "version": "6.0.0",
+  "version": "7.0.0",
   "private": true,
-  "description": "Retro pixel-football 10-player online draft race",
+  "description": "Retro emoji draft race with stompable defense waves",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

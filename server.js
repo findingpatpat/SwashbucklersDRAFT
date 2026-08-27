@@ -39,20 +39,21 @@ const NUKE_CHAIN_START_MS = 400;
 const DEFENDER_SPEED_YPS = 1.65;
 const DEFENDER_HIT_RANGE = 1.25;
 const DEFENDER_RESPAWN_X = 103;
-const JUMP_DURATION_MS = 900;
+const DEFENDER_RESPAWN_DELAY_MS = 1200;
+const JUMP_DURATION_MS = 1800;
 const FORWARD_THROW_RANGE = 16;
 
 const CHARACTERS = [
-  { id:"fridge", name:"The Fridge", icon:"▣", jersey:"#e9ecef", skin:"#c98c65", accent:"#495057" },
-  { id:"uncle", name:"Uncle Rico", icon:"R", jersey:"#f59f00", skin:"#d7a477", accent:"#7f5539" },
-  { id:"dad", name:"Grill Dad", icon:"G", jersey:"#f03e3e", skin:"#b97850", accent:"#212529" },
-  { id:"wizard", name:"Fourth-Down Wizard", icon:"W", jersey:"#7048e8", skin:"#d6a77a", accent:"#ffd43b" },
-  { id:"mascot", name:"Suspicious Mascot", icon:"M", jersey:"#12b886", skin:"#8fbc8f", accent:"#0b7285" },
-  { id:"coach", name:"Coach Cargo Shorts", icon:"C", jersey:"#1971c2", skin:"#d3a06d", accent:"#74c0fc" },
-  { id:"hotdog", name:"Halftime Hotdog", icon:"H", jersey:"#e8590c", skin:"#f4a261", accent:"#ffd43b" },
-  { id:"intern", name:"Practice Squad Intern", icon:"I", jersey:"#868e96", skin:"#c68b59", accent:"#dee2e6" },
-  { id:"goat", name:"Discount GOAT", icon:"D", jersey:"#212529", skin:"#b08968", accent:"#f8f9fa" },
-  { id:"kicker", name:"Overconfident Kicker", icon:"K", jersey:"#c2255c", skin:"#d1a17b", accent:"#ffa8a8" }
+  { id:"shoe", name:"The Shoe", icon:"👟", jersey:"#ff922b", skin:"#ffd8a8", accent:"#7c2d12" },
+  { id:"smiley", name:"Smiley Face", icon:"😀", jersey:"#ffd43b", skin:"#ffe066", accent:"#f59f00" },
+  { id:"horse", name:"Horse", icon:"🐴", jersey:"#8d5524", skin:"#c68642", accent:"#5c3a21" },
+  { id:"snail", name:"Turbo Snail", icon:"🐌", jersey:"#82c91e", skin:"#d8f5a2", accent:"#5c940d" },
+  { id:"poop", name:"Pile of Shit", icon:"💩", jersey:"#8b5e3c", skin:"#a47148", accent:"#5c4033" },
+  { id:"banana", name:"Loose Banana", icon:"🍌", jersey:"#ffe066", skin:"#ffd43b", accent:"#f08c00" },
+  { id:"chicken", name:"Angry Chicken", icon:"🐔", jersey:"#fff3bf", skin:"#fff9db", accent:"#e03131" },
+  { id:"alien", name:"Little Alien", icon:"👽", jersey:"#69db7c", skin:"#8ce99a", accent:"#2b8a3e" },
+  { id:"ghost", name:"Ghost Guy", icon:"👻", jersey:"#f8f9fa", skin:"#ffffff", accent:"#adb5bd" },
+  { id:"hotdog", name:"Hot Dog", icon:"🌭", jersey:"#e8590c", skin:"#ffa94d", accent:"#c92a2a" }
 ];
 
 app.use(express.static("public"));
@@ -102,6 +103,7 @@ function initRacePlayer(p) {
   p.isJumpingUntil = 0;
   p.defenderX = DEFENDER_RESPAWN_X;
   p.defenderAlive = true;
+  p.defenderRespawnAt = 0;
 }
 
 function statePayload() {
@@ -220,28 +222,56 @@ function startDefenseWave(){
     last = now;
 
     for (const p of players.values()) {
-      if (p.finished || !p.defenderAlive) continue;
+      if (p.finished) continue;
+
+      // Once a defender is gone, wait until the prior one has fully cleared
+      // before spawning the next defensive player in that lane.
+      if (!p.defenderAlive) {
+        if (p.defenderRespawnAt && now >= p.defenderRespawnAt) {
+          p.defenderX = DEFENDER_RESPAWN_X;
+          p.defenderAlive = true;
+          p.defenderRespawnAt = 0;
+          io.emit("defenderRespawn", { playerId:p.id });
+        }
+        continue;
+      }
 
       p.defenderX -= DEFENDER_SPEED_YPS * dt;
 
+      // Defender has run completely through the lane.
       if (p.defenderX < -3) {
-        p.defenderX = DEFENDER_RESPAWN_X;
+        p.defenderAlive = false;
+        p.defenderRespawnAt = now + DEFENDER_RESPAWN_DELAY_MS;
+        continue;
       }
 
-      if (
-        p.fallenUntil <= now &&
-        p.isJumpingUntil <= now &&
-        Math.abs(p.defenderX - p.distance) <= DEFENDER_HIT_RANGE
-      ) {
-        p.distance = 0;
-        p.lastInput = null;
-        p.fallenUntil = now + 1200;
-        p.defenderX = DEFENDER_RESPAWN_X;
+      const contact = Math.abs(p.defenderX - p.distance) <= DEFENDER_HIT_RANGE;
 
-        io.emit("defenderTackle", {
-          playerId:p.id,
-          playerName:p.name
-        });
+      if (contact) {
+        // Jumping on top of the defender squashes him.
+        if (p.isJumpingUntil > now) {
+          p.defenderAlive = false;
+          p.defenderRespawnAt = now + DEFENDER_RESPAWN_DELAY_MS;
+          io.emit("defenderSquashed", {
+            playerId:p.id,
+            playerName:p.name
+          });
+          continue;
+        }
+
+        // Normal contact: defender sends the racer back to the start.
+        if (p.fallenUntil <= now) {
+          p.distance = 0;
+          p.lastInput = null;
+          p.fallenUntil = now + 1200;
+          p.defenderAlive = false;
+          p.defenderRespawnAt = now + DEFENDER_RESPAWN_DELAY_MS;
+
+          io.emit("defenderTackle", {
+            playerId:p.id,
+            playerName:p.name
+          });
+        }
       }
     }
   }, 80);
@@ -608,13 +638,10 @@ io.on("connection",socket=>{
     setTimeout(()=>{
       if (!players.has(p.id)) return;
       p.defenderAlive = false;
+      p.defenderRespawnAt = Date.now() + DEFENDER_RESPAWN_DELAY_MS;
       io.emit("defenderDestroyed",{playerId:p.id,playerName:p.name});
 
-      setTimeout(()=>{
-        if (!players.has(p.id) || raceState!=="racing") return;
-        p.defenderX = DEFENDER_RESPAWN_X;
-        p.defenderAlive = true;
-      },7000);
+      p.defenderRespawnAt = Date.now() + DEFENDER_RESPAWN_DELAY_MS;
     },THROW_TRAVEL_MS);
   });
 

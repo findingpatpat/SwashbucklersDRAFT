@@ -116,6 +116,12 @@ h1{
   position:absolute;left:0;right:0;top:23px;z-index:2;
   color:#fff;font-weight:900;font-size:14px
 }
+.emoji-character{
+  font-size:46px;
+  line-height:1;
+  margin:4px auto 10px;
+  filter:drop-shadow(3px 3px 0 #000)
+}
 .character-name{font-size:11px;font-weight:900;line-height:1.05}
 
 #gameScreen{
@@ -197,33 +203,27 @@ h1{
 }
 .runner-sprite{
   position:absolute;
-  top:25px;
+  top:18px;
   left:2.5%;
-  width:28px;height:25px;
+  width:34px;height:34px;
   transform:translateX(-50%);
   z-index:5;
-  transition:left 80ms linear,transform 110ms ease
+  transition:left 80ms linear,transform 140ms ease;
+  font-size:29px;
+  line-height:34px;
+  text-align:center;
+  filter:drop-shadow(2px 2px 0 #000)
 }
-.runner-sprite .helmet{
-  position:absolute;
-  left:8px;top:0;width:13px;height:9px;
-  background:var(--accent);
-  border:2px solid #111
+.runner-sprite.fallen{transform:translateX(-50%) rotate(90deg)}
+.runner-sprite.jumping{
+  animation:jumpArc 1.8s ease-in-out;
 }
-.runner-sprite .torso{
-  position:absolute;
-  left:6px;top:9px;width:17px;height:10px;
-  background:var(--jersey);
-  border:2px solid #111
+@keyframes jumpArc{
+  0%{transform:translateX(-50%) translateY(0)}
+  35%{transform:translateX(-50%) translateY(-27px) scale(1.08)}
+  65%{transform:translateX(-50%) translateY(-27px) scale(1.08)}
+  100%{transform:translateX(-50%) translateY(0)}
 }
-.runner-sprite .leg1,.runner-sprite .leg2{
-  position:absolute;
-  top:19px;width:5px;height:6px;background:#fff
-}
-.runner-sprite .leg1{left:6px}
-.runner-sprite .leg2{left:17px}
-.runner-sprite.fallen{transform:translateX(-50%) rotate(85deg)}
-.runner-sprite.jumping{transform:translateX(-50%) translateY(-15px)}
 .shield{
   position:absolute;
   top:25px;
@@ -404,7 +404,7 @@ h1{
   <div class="setup pixel-panel">
     <div class="kicker">DRAFT NIGHT // PLAYER ENTRY</div>
     <h1>RETRO 100</h1>
-    <div>Enter your name first. Then pick your racer.</div>
+    <div>Enter your name first. Then claim one ridiculous racer before somebody else does.</div>
     <input id="nameInput" maxlength="20" autocomplete="off" placeholder="PLAYER NAME">
     <button id="toCharacters" class="big-btn">SELECT CHARACTER ▶</button>
     <div id="error"></div>
@@ -415,7 +415,7 @@ h1{
   <div class="setup pixel-panel">
     <div class="kicker">LOCKER ROOM // PICK ONE</div>
     <h1>CHOOSE YOUR LEGEND</h1>
-    <div>Characters are exclusive. Once somebody takes one, it's locked.</div>
+    <div>Characters are exclusive. If somebody takes the 💩, you're out of luck.</div>
     <div id="characterGrid" class="character-grid"></div>
     <button id="joinBtn" class="big-btn" disabled>JOIN RACE</button>
     <div id="characterError"></div>
@@ -464,7 +464,7 @@ h1{
         <div class="legend">
           ←/→ alternate to run<br>
           ↑/↓ hit adjacent racers<br>
-          SPACE jumps defenders<br>
+          SPACE makes a long jump — land on a defender to squash him<br>
           F throws at your lane defender
         </div>
       </div>

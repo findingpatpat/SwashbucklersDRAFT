@@ -103,12 +103,7 @@ function renderCharacters(){
     if (c.id===selectedCharacterId) btn.classList.add("selected");
 
     btn.innerHTML = `
-      <div class="pixel-dude" style="--jersey:${c.jersey};--skin:${c.skin}">
-        <div class="head"></div>
-        <div class="body"></div>
-        <div class="letter">${escapeHtml(c.icon)}</div>
-        <div class="legs"></div>
-      </div>
+      <div class="emoji-character">${escapeHtml(c.icon)}</div>
       <div class="character-name">${escapeHtml(c.name)}</div>
       <div class="note">${c.taken ? "TAKEN" : "AVAILABLE"}</div>
     `;
@@ -284,6 +279,15 @@ socket.on("defenderDestroyed",e=>{
   message.textContent=`${e.playerName} cleared the lane defender.`;
 });
 
+socket.on("defenderSquashed",e=>{
+  showToast(e.playerId,"SQUASH! 💥");
+  message.textContent=`${e.playerName} landed on the defender's head and squashed him!`;
+});
+
+socket.on("defenderRespawn",e=>{
+  // Quiet event; the new defender simply enters from the far end of the lane.
+});
+
 socket.on("defenderTackle",e=>{
   showToast(e.playerId,"BACK TO START!");
   message.textContent=`DEFENSE! ${e.playerName} got sent back to the goal line.`;
@@ -298,7 +302,7 @@ socket.on("jumped",e=>{
   const r=runnerFor(e.playerId);
   if(r){
     r.classList.add("jumping");
-    setTimeout(()=>r.classList.remove("jumping"),900);
+    setTimeout(()=>r.classList.remove("jumping"),1800);
   }
 });
 
@@ -474,11 +478,7 @@ function render(){
         <div class="lane-label"></div>
         <div class="shield"></div>
         <div class="defender"></div>
-        <div class="runner-sprite">
-          <div class="helmet"></div>
-          <div class="torso"></div>
-          <div class="leg1"></div><div class="leg2"></div>
-        </div>
+        <div class="runner-sprite emoji-runner"></div>
       `;
       track.appendChild(lane);
     }
@@ -487,8 +487,7 @@ function render(){
       `#${p.lane} ${p.name}${p.id===myId?" [YOU]":""}${state.raceState==="lobby"?(p.ready?" ✓":" NOT READY"):""}`;
 
     const r=lane.querySelector(".runner-sprite");
-    r.style.setProperty("--jersey",c.jersey);
-    r.style.setProperty("--accent",c.accent);
+    r.textContent=c.icon || "😀";
     r.classList.toggle("fallen",!!p.isFallen);
     r.classList.toggle("jumping",!!p.isJumping);
 
