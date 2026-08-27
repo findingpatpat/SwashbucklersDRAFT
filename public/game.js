@@ -50,6 +50,15 @@ const results = $("results");
 const countdown = $("countdown");
 const reloadDial = $("reloadDial");
 const reloadText = $("reloadText");
+const chatLaunch = $("chatLaunch");
+const chatPanel = $("chatPanel");
+const chatClose = $("chatClose");
+const chatMessages = $("chatMessages");
+const chatForm = $("chatForm");
+const chatInput = $("chatInput");
+const chatUnread = $("chatUnread");
+let chatOpen = false;
+let unreadChat = 0;
 
 toCharacters.onclick = () => {
   pendingName = nameInput.value.trim();
@@ -74,6 +83,69 @@ joinBtn.onclick = () => {
     characterId:selectedCharacterId
   });
 };
+
+
+function setChatOpen(open){
+  chatOpen = !!open;
+  chatPanel.classList.toggle("hidden",!chatOpen);
+  chatLaunch.classList.toggle("hidden",chatOpen || !myId);
+
+  if(chatOpen){
+    unreadChat = 0;
+    chatUnread.textContent = "0";
+    chatUnread.classList.add("hidden");
+    setTimeout(()=>chatInput.focus(),0);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+}
+
+chatLaunch.onclick = ()=>setChatOpen(true);
+chatClose.onclick = ()=>setChatOpen(false);
+
+chatForm.addEventListener("submit",e=>{
+  e.preventDefault();
+  const text = chatInput.value.trim();
+  if(!text) return;
+  socket.emit("chatMessage",text);
+  chatInput.value = "";
+  chatInput.focus();
+});
+
+function appendChatMessage(m){
+  const line = document.createElement("div");
+  line.className = "chat-line";
+
+  const who = document.createElement("strong");
+  who.textContent = `${m.icon || "🏈"} ${m.name}: `;
+
+  const text = document.createElement("span");
+  text.textContent = m.text;
+
+  line.appendChild(who);
+  line.appendChild(text);
+  chatMessages.appendChild(line);
+
+  while(chatMessages.children.length > 40){
+    chatMessages.firstElementChild.remove();
+  }
+
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+
+  if(!chatOpen && m.playerId !== myId){
+    unreadChat += 1;
+    chatUnread.textContent = unreadChat > 9 ? "9+" : String(unreadChat);
+    chatUnread.classList.remove("hidden");
+  }
+}
+
+socket.on("chatHistory",messages=>{
+  chatMessages.innerHTML = "";
+  for(const m of messages || []) appendChatMessage(m);
+  unreadChat = 0;
+  chatUnread.classList.add("hidden");
+});
+
+socket.on("chatMessage",m=>appendChatMessage(m));
 
 readyBtn.onclick = ()=>socket.emit("toggleReady");
 startBtn.onclick = ()=>socket.emit("startRace");
@@ -141,6 +213,7 @@ socket.on("joined",data=>{
   myId = data.id;
   characterScreen.classList.add("hidden");
   gameScreen.classList.remove("hidden");
+  chatLaunch.classList.remove("hidden");
 });
 
 socket.on("joinError",msg=>{

@@ -8,6 +8,9 @@ const io = new Server(server, { transports: ["websocket", "polling"] });
 
 const PORT = process.env.PORT || 3000;
 const MAX_PLAYERS = 10;
+const CHAT_MAX_LENGTH = 120;
+const CHAT_HISTORY_LIMIT = 40;
+const CHAT_RATE_LIMIT_MS = 1000;
 const DISTANCE = 100;
 
 const STEP_YARDS = 0.40;
@@ -67,6 +70,8 @@ let defenseTimer = null;
 
 const players = new Map();
 const pendingAttacks = new Map();
+const chatHistory = [];
+const lastChatAt = new Map();
 
 function cleanName(name) {
   return String(name || "Player").replace(/[<>]/g, "").trim().slice(0, 20) || "Player";
@@ -480,6 +485,7 @@ io.on("connection",socket=>{
     players.set(socket.id,p);
 
     socket.emit("joined",{id:socket.id});
+    socket.emit("chatHistory", chatHistory);
     io.emit("message",`${p.name} joined as #${p.lane} — ${character.name}.`);
     io.emit("characterState", {
       characters: CHARACTERS.map(c => ({...c,taken:characterTaken(c.id)}))
@@ -699,6 +705,40 @@ io.on("connection",socket=>{
     if (socket.id===hostId) resetRace();
   });
 
+  socket.on("chatMessage",raw=>{
+    const p = players.get(socket.id);
+    if (!p) return;
+
+    const now = Date.now();
+    const last = lastChatAt.get(socket.id) || 0;
+    if (now-last < CHAT_RATE_LIMIT_MS) return;
+
+    let text = String(raw || "")
+      .replace(/[<>]/g,"")
+      .replace(/\s+/g," ")
+      .trim()
+      .slice(0,CHAT_MAX_LENGTH);
+
+    if (!text) return;
+
+    lastChatAt.set(socket.id,now);
+
+    const c = characterById(p.characterId);
+    const msg = {
+      id:`${socket.id}-${now}`,
+      playerId:p.id,
+      name:p.name,
+      icon:c?.icon || "🏈",
+      text,
+      at:now
+    };
+
+    chatHistory.push(msg);
+    while (chatHistory.length > CHAT_HISTORY_LIMIT) chatHistory.shift();
+
+    io.emit("chatMessage",msg);
+  });
+
   socket.on("disconnect",()=>{
     const p = players.get(socket.id);
     if (p) io.emit("message",`${p.name} left.`);
@@ -710,6 +750,7 @@ io.on("connection",socket=>{
     }
 
     players.delete(socket.id);
+    lastChatAt.delete(socket.id);
 
     io.emit("characterState", {
       characters: CHARACTERS.map(c => ({...c,taken:characterTaken(c.id)}))
