@@ -1,8 +1,8 @@
 {
-  "name": "online-100-yard-draft-race-v3",
-  "version": "3.0.0",
+  "name": "online-100-yard-draft-race-v4",
+  "version": "4.0.0",
   "private": true,
-  "description": "10-player online 100-yard draft race with lane knockdowns",
+  "description": "10-player online draft race with knockdowns, football throws, streaks, and blockers",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

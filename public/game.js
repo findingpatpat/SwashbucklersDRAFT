@@ -18,6 +18,8 @@ const joinBtn = $("joinBtn");
 const errorEl = $("error");
 const playerCount = $("playerCount");
 const stateLabel = $("stateLabel");
+const streakLabel = $("streakLabel");
+const blockerLabel = $("blockerLabel");
 const hostLabel = $("hostLabel");
 const message = $("message");
 const track = $("track");
@@ -25,6 +27,7 @@ const leftBtn = $("leftBtn");
 const rightBtn = $("rightBtn");
 const upBtn = $("upBtn");
 const downBtn = $("downBtn");
+const throwBtn = $("throwBtn");
 const readyBtn = $("readyBtn");
 const startBtn = $("startBtn");
 const resetBtn = $("resetBtn");
@@ -68,6 +71,12 @@ function attemptAttack(direction) {
   socket.emit("attack", direction);
 }
 
+function attemptThrow() {
+  if (!canAct()) return;
+  flash(throwBtn);
+  socket.emit("throwFootball");
+}
+
 function flash(btn) {
   btn.classList.add("pressed");
   setTimeout(() => btn.classList.remove("pressed"), 90);
@@ -85,6 +94,7 @@ leftBtn.addEventListener("pointerdown", e => { e.preventDefault(); attemptStride
 rightBtn.addEventListener("pointerdown", e => { e.preventDefault(); attemptStride("right"); });
 upBtn.addEventListener("pointerdown", e => { e.preventDefault(); attemptAttack("up"); });
 downBtn.addEventListener("pointerdown", e => { e.preventDefault(); attemptAttack("down"); });
+throwBtn.addEventListener("pointerdown", e => { e.preventDefault(); attemptThrow(); });
 
 window.addEventListener("keydown", e => {
   if (e.repeat) return;
@@ -101,6 +111,9 @@ window.addEventListener("keydown", e => {
   } else if (e.key === "ArrowDown") {
     e.preventDefault();
     attemptAttack("down");
+  } else if (e.code === "Space") {
+    e.preventDefault();
+    attemptThrow();
   }
 });
 
@@ -143,6 +156,30 @@ socket.on("knockdown", e => {
     localLastInput = null;
     fallBanner.classList.remove("hidden");
     setTimeout(() => fallBanner.classList.add("hidden"), 900);
+  }
+});
+
+socket.on("footballThrown", e => {
+  animateFootball(e.shooterId, e.targetId, e.travelMs);
+});
+
+socket.on("footballMiss", e => {
+  if (e.shooterId === myId) message.textContent = e.reason === "no_target" ? "No racer is within throwing range." : "Your target moved out of range.";
+});
+
+socket.on("footballBlocked", e => {
+  showToast(e.targetId, "🛡️ BLOCKED!");
+  message.textContent = `${e.targetName}'s blocker intercepted ${e.shooterName}'s football!`;
+});
+
+socket.on("footballHit", e => {
+  showToast(e.targetId, "🏈 HIT!");
+  if (e.targetId === myId) localLastInput = null;
+  if (e.earnedBlocker) {
+    showToast(e.shooterId, "🛡️ BLOCKER!");
+    message.textContent = `${e.shooterName} hit ${e.targetName} 3 times in a row and earned a blocker!`;
+  } else {
+    message.textContent = `${e.shooterName} hit ${e.targetName} with a football!`;
   }
 });
 
@@ -198,6 +235,48 @@ socket.on("state", s => {
   handleCountdown();
 });
 
+function laneFor(id) {
+  try { return track.querySelector(`.lane[data-id="${CSS.escape(id)}"]`); } catch { return null; }
+}
+
+function runnerFor(id) {
+  return laneFor(id)?.querySelector(".runner") || null;
+}
+
+function showToast(id, text) {
+  const lane = laneFor(id);
+  const runner = runnerFor(id);
+  if (!lane || !runner) return;
+  const toast = document.createElement("div");
+  toast.className = "toast";
+  toast.textContent = text;
+  toast.style.left = runner.style.left || "2.5%";
+  toast.style.top = "26px";
+  lane.appendChild(toast);
+  setTimeout(() => toast.remove(), 850);
+}
+
+function animateFootball(shooterId, targetId, travelMs) {
+  const shooter = runnerFor(shooterId);
+  const target = runnerFor(targetId);
+  if (!shooter || !target) return;
+  const tr = track.getBoundingClientRect();
+  const sr = shooter.getBoundingClientRect();
+  const rr = target.getBoundingClientRect();
+  const ball = document.createElement("div");
+  ball.className = "football";
+  ball.textContent = "🏈";
+  ball.style.left = `${sr.left - tr.left + sr.width/2}px`;
+  ball.style.top = `${sr.top - tr.top + sr.height/2}px`;
+  ball.style.transitionDuration = `${travelMs}ms`;
+  track.appendChild(ball);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    ball.style.left = `${rr.left - tr.left + rr.width/2}px`;
+    ball.style.top = `${rr.top - tr.top + rr.height/2}px`;
+  }));
+  setTimeout(() => ball.remove(), travelMs + 120);
+}
+
 function renderStatic() {
   if (!state) return;
 
@@ -212,6 +291,8 @@ function renderStatic() {
     state.raceState === "countdown" ? "Starting…" :
     state.raceState === "racing" ? "Racing" : "Finished";
   hostLabel.textContent = host ? `👑 Host: ${host.name}` : "👑 Host";
+  streakLabel.textContent = `🎯 Streak: ${mine?.streakCount || 0}/3`;
+  blockerLabel.textContent = `🛡️ Blockers: ${mine?.blockers || 0}`;
 
   const sorted = [...state.players].sort((a,b) => a.lane-b.lane);
   const existing = new Map([...track.querySelectorAll(".lane")].map(el => [el.dataset.id, el]));
@@ -228,6 +309,7 @@ function renderStatic() {
       lane.dataset.id = p.id;
       lane.innerHTML = `
         <div class="lane-name"></div>
+        <div class="blockers"></div>
         <div class="runner">🏃</div>
         <div class="finish"></div>
         <div class="place hidden"></div>`;
@@ -245,6 +327,7 @@ function renderStatic() {
 
     const runner = lane.querySelector(".runner");
     runner.classList.toggle("fallen", !!p.fallen);
+    lane.querySelector(".blockers").textContent = p.blockers > 0 ? "🧱".repeat(p.blockers) : "";
 
     const place = lane.querySelector(".place");
     if (p.place) {
@@ -277,6 +360,7 @@ function renderStatic() {
   rightBtn.disabled = !active;
   upBtn.disabled = !active;
   downBtn.disabled = !active;
+  throwBtn.disabled = !active;
 
   results.innerHTML = state.finishOrder.length
     ? `<h3>🏆 Draft Order</h3>` +
@@ -318,10 +402,13 @@ function animationLoop() {
       if (Math.abs(target - visual) < 0.02) visual = target;
       visualDistances.set(p.id, visual);
 
-      const runner = track.querySelector(`.lane[data-id="${CSS.escape(p.id)}"] .runner`);
+      const lane = laneFor(p.id);
+      const runner = runnerFor(p.id);
       if (runner) {
         const pct = 2.5 + (Math.min(100, visual) / 100) * 94;
         runner.style.left = `${pct}%`;
+        const blockers = lane?.querySelector(".blockers");
+        if (blockers) blockers.style.left = `${Math.max(2.5, pct - 3)}%`;
       }
     }
   }

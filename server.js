@@ -24,6 +24,13 @@ const ATTACK_COOLDOWN_MS = 650;    // Prevents attack-key spam.
 const FALL_DURATION_MS = 1600;     // Fallen runner cannot stride/attack.
 const FALL_SETBACK_YARDS = 1.2;    // Small setback so a hit matters.
 
+// Football rules.
+const THROW_RANGE_YARDS = 12.0;
+const THROW_COOLDOWN_MS = 1100;
+const THROW_TRAVEL_MS = 320;
+const BALL_STUMBLE_MS = 500;
+const MAX_BLOCKERS = 3;
+
 app.use(express.static("public"));
 
 let hostId = null;
@@ -69,7 +76,10 @@ function payload() {
       finished: p.finished,
       place: p.place,
       fallenUntil: p.fallenUntil,
-      fallen: isFallen(p, now)
+      fallen: isFallen(p, now),
+      blockers: p.blockers,
+      streakTargetId: p.streakTargetId,
+      streakCount: p.streakCount
     })),
     finishOrder
   };
@@ -99,6 +109,10 @@ function resetRace() {
     p.lastPress = 0;
     p.lastAttack = 0;
     p.fallenUntil = 0;
+    p.lastThrow = 0;
+    p.streakTargetId = null;
+    p.streakCount = 0;
+    p.blockers = 0;
   }
 
   broadcastState();
@@ -166,6 +180,61 @@ function resolveAttack(attackerId, targetId, direction, createdAt) {
   broadcastState();
 }
 
+function nearestThrowTarget(shooter) {
+  let best = null;
+  let bestScore = Infinity;
+
+  for (const p of players.values()) {
+    if (p.id === shooter.id || p.finished) continue;
+    const longitudinal = Math.abs(p.distance - shooter.distance);
+    if (longitudinal > THROW_RANGE_YARDS) continue;
+    const score = longitudinal + Math.abs(p.lane - shooter.lane) * 1.25;
+    if (score < bestScore) { bestScore = score; best = p; }
+  }
+  return best;
+}
+
+function resolveFootball(shooterId, targetId, throwId) {
+  const shooter = players.get(shooterId);
+  const target = players.get(targetId);
+  if (!shooter || !target || raceState !== "racing") return;
+  if (shooter.finished || target.finished) return;
+
+  if (Math.abs(shooter.distance - target.distance) > THROW_RANGE_YARDS + 2) {
+    shooter.streakTargetId = null;
+    shooter.streakCount = 0;
+    io.emit("footballMiss", { throwId, shooterId, targetId, reason: "moved" });
+    broadcastState();
+    return;
+  }
+
+  if (target.blockers > 0) {
+    target.blockers -= 1;
+    shooter.streakTargetId = null;
+    shooter.streakCount = 0;
+    io.emit("footballBlocked", { throwId, shooterId, shooterName: shooter.name, targetId, targetName: target.name, blockersLeft: target.blockers });
+    broadcastState();
+    return;
+  }
+
+  if (shooter.streakTargetId === targetId) shooter.streakCount += 1;
+  else { shooter.streakTargetId = targetId; shooter.streakCount = 1; }
+
+  target.fallenUntil = Math.max(target.fallenUntil, Date.now() + BALL_STUMBLE_MS);
+  target.lastInput = null;
+
+  let earnedBlocker = false;
+  if (shooter.streakCount >= 3) {
+    shooter.blockers = Math.min(MAX_BLOCKERS, shooter.blockers + 1);
+    shooter.streakTargetId = null;
+    shooter.streakCount = 0;
+    earnedBlocker = true;
+  }
+
+  io.emit("footballHit", { throwId, shooterId, shooterName: shooter.name, targetId, targetName: target.name, streakCount: shooter.streakCount, earnedBlocker, blockerCount: shooter.blockers });
+  broadcastState();
+}
+
 setInterval(() => {
   if (players.size) broadcastState();
 }, SNAPSHOT_MS);
@@ -196,7 +265,11 @@ io.on("connection", socket => {
       lastInput: null,
       lastPress: 0,
       lastAttack: 0,
-      fallenUntil: 0
+      fallenUntil: 0,
+      lastThrow: 0,
+      streakTargetId: null,
+      streakCount: 0,
+      blockers: 0
     };
 
     players.set(socket.id, p);
@@ -235,6 +308,10 @@ io.on("connection", socket => {
       p.lastPress = 0;
       p.lastAttack = 0;
       p.fallenUntil = 0;
+      p.lastThrow = 0;
+      p.streakTargetId = null;
+      p.streakCount = 0;
+      p.blockers = 0;
     }
 
     raceState = "countdown";
@@ -344,6 +421,27 @@ io.on("connection", socket => {
     socket.emit("attackQueued", { direction, targetId: target.id });
   });
 
+  socket.on("throwFootball", () => {
+    const shooter = players.get(socket.id);
+    const now = Date.now();
+    if (!shooter || raceState !== "racing" || shooter.finished || isFallen(shooter, now)) return;
+    if (now - shooter.lastThrow < THROW_COOLDOWN_MS) return;
+    shooter.lastThrow = now;
+
+    const target = nearestThrowTarget(shooter);
+    if (!target) {
+      shooter.streakTargetId = null;
+      shooter.streakCount = 0;
+      socket.emit("footballMiss", { shooterId: shooter.id, reason: "no_target" });
+      broadcastState();
+      return;
+    }
+
+    const throwId = `${shooter.id}-${now}`;
+    io.emit("footballThrown", { throwId, shooterId: shooter.id, shooterName: shooter.name, targetId: target.id, targetName: target.name, travelMs: THROW_TRAVEL_MS });
+    setTimeout(() => resolveFootball(shooter.id, target.id, throwId), THROW_TRAVEL_MS);
+  });
+
   socket.on("resetRace", () => {
     if (socket.id === hostId) resetRace();
   });
@@ -383,5 +481,5 @@ io.on("connection", socket => {
 });
 
 server.listen(PORT, () => {
-  console.log(`100 Yard Draft Race v3 running on port ${PORT}`);
+  console.log(`100 Yard Draft Race v4 running on port ${PORT}`);
 });

@@ -35,13 +35,20 @@ input{width:100%;margin:16px 0 10px;padding:14px 16px;border-radius:12px;border:
 .runner.fallen{transform:translateX(-50%) rotate(90deg) scaleX(-1)}
 .runner.attacking-up{transform:translateX(-50%) translateY(-7px) scaleX(-1)}
 .runner.attacking-down{transform:translateX(-50%) translateY(7px) scaleX(-1)}
+.blockers{position:absolute;top:22px;z-index:3;transform:translateX(-50%);font-size:14px;letter-spacing:-3px;pointer-events:none}
+.football{position:absolute;z-index:8;font-size:19px;transform:translate(-50%,-50%);pointer-events:none;transition:left 320ms linear,top 320ms linear}
+.toast{position:absolute;z-index:9;pointer-events:none;font-size:12px;font-weight:1000;background:#000c;padding:3px 6px;border-radius:8px;transform:translate(-50%,-100%);animation:toast .8s ease forwards}
+@keyframes toast{100%{opacity:0;transform:translate(-50%,-160%)}}
 .finish{position:absolute;right:0;top:0;bottom:0;width:20px;background:repeating-linear-gradient(45deg,#fff 0 5px,#111 5px 10px)}
 .place{position:absolute;right:26px;top:12px;padding:3px 7px;border-radius:8px;background:#000b;font-weight:900;font-size:12px}
 .controls-grid{display:grid;grid-template-columns:90px minmax(0,1fr) 90px;gap:10px;align-items:center;margin:16px auto 8px;max-width:820px}
 .attack-stack{display:grid;gap:8px}
 .attack{min-height:58px;border:1px solid #ffffff22;border-radius:14px;background:#293949;color:#fff;font-weight:1000;font-size:24px;touch-action:manipulation;user-select:none;-webkit-user-select:none}
 .attack:active,.attack.pressed{transform:scale(.96);background:#3e5972}
-.strides{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.strides{display:grid;grid-template-columns:1fr 120px 1fr;gap:10px}
+.throw{min-height:82px;border:1px solid #ffffff22;border-radius:16px;background:#306da3;color:#fff;font-weight:1000;font-size:18px;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.throw:active,.throw.pressed{transform:scale(.97);background:#3d82bf}
+.throw:disabled{opacity:.28;cursor:not-allowed}
 .stride{min-height:82px;border:1px solid #ffffff22;border-radius:16px;background:#e6bf47;color:#111;font-weight:1000;font-size:25px;box-shadow:0 7px 0 #9d8128;touch-action:manipulation;user-select:none;-webkit-user-select:none}
 .stride:active,.stride.pressed{transform:translateY(5px);box-shadow:0 2px 0 #9d8128}
 .stride:disabled,.attack:disabled{opacity:.28;cursor:not-allowed;box-shadow:none}
@@ -81,6 +88,8 @@ input{width:100%;margin:16px 0 10px;padding:14px 16px;border-radius:12px;border:
     <div class="left-meta">
       <div class="badge"><strong id="playerCount">0</strong>/10 Players</div>
       <div id="stateLabel" class="badge">Lobby</div>
+      <div id="streakLabel" class="badge">🎯 Streak: 0/3</div>
+      <div id="blockerLabel" class="badge">🛡️ Blockers: 0</div>
     </div>
     <div class="right-meta">
       <div id="hostLabel" class="badge host-badge">👑 Host</div>
@@ -101,6 +110,7 @@ input{width:100%;margin:16px 0 10px;padding:14px 16px;border-radius:12px;border:
 
     <div class="strides">
       <button id="leftBtn" class="stride" disabled>← LEFT</button>
+      <button id="throwBtn" class="throw" disabled>🏈 THROW<br><small>SPACE</small></button>
       <button id="rightBtn" class="stride" disabled>RIGHT →</button>
     </div>
 
@@ -113,7 +123,8 @@ input{width:100%;margin:16px 0 10px;padding:14px 16px;border-radius:12px;border:
   <div class="control-hint">
     <strong>← →</strong> alternate to run &nbsp;•&nbsp;
     <strong>↑ ↓</strong> hit the runner in the adjacent lane when you're within 3 yards.<br>
-    First hit wins. Truly simultaneous hits cancel each other.
+    First hit wins. Truly simultaneous hits cancel each other.<br>
+    <strong>SPACE</strong> throws at the nearest racer within 12 yards. Hit the same racer 3 consecutive times to earn a blocker.
   </div>
 
   <div class="lobby-actions">
