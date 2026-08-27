@@ -1,8 +1,8 @@
 {
   "name": "online-100-yard-draft-race-v6",
-  "version": "8.2.0",
+  "version": "8.3.0",
   "private": true,
-  "description": "Stable v8 with bulldozer defender and top-right ready button",
+  "description": "Stable v8.2 with defender-hit shields and corrected 50-percent Nuke eligibility",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

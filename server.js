@@ -98,6 +98,7 @@ function initRacePlayer(p) {
   p.streakTargetId = null;
   p.streakCount = 0;
   p.shieldHits = 0;
+  p.defenderHitCount = 0;
   p.hasNuke = false;
   p.usedNuke = false;
   p.isJumpingUntil = 0;
@@ -126,6 +127,7 @@ function statePayload() {
       isFallen:p.fallenUntil > now, fallenUntil:p.fallenUntil,
       streakTargetId:p.streakTargetId, streakCount:p.streakCount,
       shieldHits:p.shieldHits,
+      defenderHitCount:p.defenderHitCount,
       hasNuke:p.hasNuke, usedNuke:p.usedNuke,
       isJumping:p.isJumpingUntil > now,
       defenderX:p.defenderX, defenderAlive:p.defenderAlive,
@@ -187,7 +189,9 @@ function checkNukeEligibility(){
   if (!contestants.length) return;
 
   const crossed = contestants.filter(p => p.distance >= 50 || p.finished).length;
-  const threshold = Math.floor(contestants.length / 2) + 1;
+  // Trigger as soon as at least 50% of the racers have reached midfield.
+  // Examples: 2 players -> 1 across; 10 players -> 5 across.
+  const threshold = Math.ceil(contestants.length / 2);
 
   if (crossed >= threshold) {
     let changed = false;
@@ -650,12 +654,29 @@ io.on("connection",socket=>{
     });
 
     setTimeout(()=>{
-      if (!players.has(p.id)) return;
+      if (!players.has(p.id) || raceState!=="racing" || !p.defenderAlive) return;
+
       p.defenderAlive = false;
       p.defenderRespawnAt = Date.now() + DEFENDER_RESPAWN_DELAY_MS;
-      io.emit("defenderDestroyed",{playerId:p.id,playerName:p.name});
 
-      p.defenderRespawnAt = Date.now() + DEFENDER_RESPAWN_DELAY_MS;
+      p.defenderHitCount += 1;
+      let earnedDefenderShield = false;
+
+      if (p.defenderHitCount >= 3) {
+        p.defenderHitCount = 0;
+        p.shieldHits = SHIELD_HITS;
+        earnedDefenderShield = true;
+      }
+
+      io.emit("defenderDestroyed",{
+        playerId:p.id,
+        playerName:p.name,
+        defenderHitCount:p.defenderHitCount,
+        earnedShield:earnedDefenderShield,
+        shieldHits:p.shieldHits
+      });
+
+      broadcastState();
     },THROW_TRAVEL_MS);
   });
 

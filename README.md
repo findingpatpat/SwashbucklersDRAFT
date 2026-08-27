@@ -1,22 +1,41 @@
-# Retro Draft Race v8.2 — Minimal Patch
+# Retro Draft Race v8.3
 
-This version starts directly from the working v8 build.
+This is a small gameplay patch based directly on the stable v8.2 build.
 
-Only two interface changes were made:
+## New: hit 3 defensive players = shield
+Successful forward football hits on the bulldozer defender now count toward a separate 3-hit reward.
 
-- Defensive player is now shown as a bulldozer-style emoji: 🚜
-- The existing I'M READY button has been moved to the top-right beside the host indicator.
+- Hit bulldozer #1: 1/3
+- Hit bulldozer #2: 2/3
+- Hit bulldozer #3: earn a full 3-hit shield
+- The defender-hit counter then resets to 0/3.
 
-The v8 server/game logic was otherwise left untouched.
+A 🚜 counter at the top of the screen shows progress.
 
-Important: v8 already includes shield protection against defensive players. When a racer with an active shield collides with the defender:
-- the defender cannot tackle or reset the racer;
-- the racer keeps their position;
-- the shield is consumed;
-- the defender resets on the existing 5-second delay.
+This is separate from the existing "hit the same racer 3 times" shield reward.
 
-All character-selection, race, Nuke, jump, throwing, shield, and defender logic remains the same as the working v8 version.
+## Nuke Ball eligibility fixed
+The Nuke Ball now unlocks when AT LEAST 50% of the racers have crossed the 50-yard line.
+
+Examples:
+- 2 racers: when 1 crosses midfield, the racer still behind midfield gets the Nuke.
+- 4 racers: when 2 cross midfield, racers still behind midfield get Nukes.
+- 10 racers: when 5 cross midfield, racers still behind midfield get Nukes.
+
+Every eligible unfinished racer behind midfield can receive one Nuke Ball.
+
+They still must be upright/running to fire it.
+
+## Everything else
+All v8.2 behavior is retained:
+- stable character selection
+- bulldozer defender icon
+- top-right I'M READY button
+- shield protects against defensive-player collisions and is consumed
+- 5-second defender reset
+- one defender per lane
+- jumps, Nuke chain, targeted footballs, reload dial, etc.
 
 ## Render
 Replace your existing GitHub repository files with this package and commit/push.
-Your existing Render URL remains the same.
+Your existing Render URL remains unchanged.

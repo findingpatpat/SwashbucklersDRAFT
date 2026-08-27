@@ -28,6 +28,7 @@ const joinBtn = $("joinBtn");
 const playerCount = $("playerCount");
 const stateLabel = $("stateLabel");
 const streakLabel = $("streakLabel");
+const defenderHitLabel = $("defenderHitLabel");
 const shieldLabel = $("shieldLabel");
 const nukeLabel = $("nukeLabel");
 const hostLabel = $("hostLabel");
@@ -276,7 +277,13 @@ socket.on("forwardMiss",()=>{
 
 socket.on("defenderDestroyed",e=>{
   showToast(e.playerId,"DEFENDER DOWN");
-  message.textContent=`${e.playerName} cleared the lane defender.`;
+
+  if (e.earnedShield) {
+    showToast(e.playerId,"🛡 SHIELD EARNED!");
+    message.textContent=`${e.playerName} hit 3 defensive players and earned a 3-hit shield!`;
+  } else {
+    message.textContent=`${e.playerName} cleared the lane defender — ${e.defenderHitCount}/3 toward a shield.`;
+  }
 });
 
 socket.on("defenderSquashed",e=>{
@@ -461,6 +468,7 @@ function render(){
   playerCount.textContent=state.players.length;
   stateLabel.textContent=state.raceState.toUpperCase();
   streakLabel.textContent=`🎯 ${mine?.streakCount||0}/3`;
+  defenderHitLabel.textContent=`🚜 ${mine?.defenderHitCount||0}/3`;
   shieldLabel.textContent=`🛡 ${mine?.shieldHits||0}/3`;
   nukeLabel.textContent=mine?.hasNuke?"☢ NUKE READY":"☢ NO NUKE";
   hostLabel.textContent=host?`HOST: ${host.name}`:"HOST";
