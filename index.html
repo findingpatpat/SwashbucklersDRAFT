@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Retro Draft Race</title>
+<style>
+:root{
+  color-scheme:dark;
+  font-family:"Courier New",ui-monospace,monospace;
+  --ink:#f8f9fa;
+  --panel:#111820;
+  --gold:#ffd43b;
+  --field:#23743a;
+  --field2:#2b8a3e;
+  --stripe:#ffffff33;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  min-height:100vh;
+  background:#090c10;
+  color:var(--ink);
+  image-rendering:pixelated
+}
+button,input{font:inherit}
+button{cursor:pointer}
+.hidden{display:none!important}
+
+.pixel-panel{
+  background:#111820;
+  border:4px solid #e9ecef;
+  box-shadow:6px 6px 0 #000
+}
+
+#nameScreen,#characterScreen{
+  min-height:100vh;
+  display:grid;
+  place-items:center;
+  padding:22px
+}
+.setup{
+  width:min(94vw,680px);
+  padding:24px
+}
+.kicker{
+  font-size:13px;
+  letter-spacing:2px;
+  color:#ffd43b
+}
+h1{
+  font-size:clamp(28px,6vw,52px);
+  margin:6px 0 12px;
+  line-height:1
+}
+.setup input{
+  width:100%;
+  margin:16px 0 12px;
+  padding:14px;
+  background:#06090c;
+  color:#fff;
+  border:3px solid #fff;
+  border-radius:0;
+  font-size:18px
+}
+.big-btn{
+  width:100%;
+  padding:14px;
+  background:#ffd43b;
+  color:#111;
+  border:0;
+  font-weight:900;
+  text-transform:uppercase
+}
+.note{font-size:12px;opacity:.72;margin-top:12px}
+#error,#characterError{color:#ff8787;min-height:20px;margin-top:8px}
+
+.character-grid{
+  display:grid;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  gap:10px;
+  margin-top:16px
+}
+.character-card{
+  background:#17212b;
+  color:#fff;
+  border:3px solid #68707a;
+  padding:10px 6px;
+  min-height:125px;
+  text-align:center
+}
+.character-card.selected{border-color:#ffd43b;transform:translateY(-2px)}
+.character-card:disabled{filter:grayscale(1);opacity:.35;cursor:not-allowed}
+.pixel-dude{
+  width:42px;height:52px;
+  margin:0 auto 8px;
+  position:relative;
+  image-rendering:pixelated
+}
+.pixel-dude .head{
+  position:absolute;left:12px;top:0;width:20px;height:18px;
+  background:var(--skin);
+  box-shadow:0 0 0 3px #111
+}
+.pixel-dude .body{
+  position:absolute;left:8px;top:20px;width:28px;height:20px;
+  background:var(--jersey);
+  box-shadow:0 0 0 3px #111
+}
+.pixel-dude .legs:before,.pixel-dude .legs:after{
+  content:"";position:absolute;top:41px;width:9px;height:11px;background:#ddd
+}
+.pixel-dude .legs:before{left:9px}
+.pixel-dude .legs:after{right:7px}
+.pixel-dude .letter{
+  position:absolute;left:0;right:0;top:23px;z-index:2;
+  color:#fff;font-weight:900;font-size:14px
+}
+.emoji-character{
+  font-size:46px;
+  line-height:1;
+  margin:4px auto 10px;
+  filter:drop-shadow(3px 3px 0 #000)
+}
+.character-name{font-size:11px;font-weight:900;line-height:1.05}
+
+#gameScreen{
+  width:min(1280px,100%);
+  margin:0 auto;
+  padding:12px
+}
+.scorebar{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  align-items:center;
+  margin-bottom:8px
+}
+.pill{
+  background:#0d1319;
+  border:2px solid #5c6770;
+  padding:6px 9px;
+  font-size:12px
+}
+.pill.gold{border-color:#ffd43b}
+.top-actions{
+  margin-left:auto;
+  display:flex;
+  gap:8px;
+  align-items:center;
+}
+.top-ready{
+  border:2px solid #fff;
+  padding:7px 11px;
+  background:#51cf66;
+  color:#111;
+  font-weight:900;
+  font-size:12px;
+}
+#message{min-height:25px;font-size:12px;padding:5px 2px}
+
+.stadium{
+  position:relative;
+  border:6px solid #d8dee4;
+  background:#171b20;
+  padding:10px 10px 18px;
+  box-shadow:7px 7px 0 #000
+}
+.crowd{
+  height:28px;
+  margin-bottom:7px;
+  background:
+    radial-gradient(circle,#ffd43b 0 2px,transparent 3px) 0 0/18px 12px,
+    radial-gradient(circle,#74c0fc 0 2px,transparent 3px) 8px 4px/22px 14px,
+    #1c2127;
+  border-bottom:4px solid #adb5bd
+}
+.track{
+  position:relative;
+  overflow:hidden;
+  border:4px solid #fff;
+  background:#2b8a3e
+}
+.lane{
+  position:relative;
+  height:54px;
+  border-bottom:2px solid #ffffff77;
+  background:
+    linear-gradient(90deg,transparent 9.6%,#ffffff35 9.7% 10.3%,transparent 10.4%),
+    repeating-linear-gradient(90deg,#23743a 0 50px,#2b8a3e 50px 100px);
+  background-size:10% 100%,100px 100%
+}
+.lane:last-child{border-bottom:0}
+.lane-label{
+  position:absolute;
+  left:4px;top:3px;z-index:4;
+  font-size:10px;
+  font-weight:900;
+  background:#000a;
+  padding:2px 4px
+}
+.yard50{
+  position:absolute;
+  left:50%;
+  top:0;bottom:0;
+  width:4px;
+  background:#ffd43b88;
+  z-index:1
+}
+.endzone{
+  position:absolute;
+  right:0;top:0;bottom:0;
+  width:4%;
+  background:#0b4f6caa;
+  border-left:3px solid #fff;
+  z-index:1
+}
+.runner-sprite{
+  position:absolute;
+  top:18px;
+  left:2.5%;
+  width:34px;height:34px;
+  transform:translateX(-50%);
+  z-index:5;
+  transition:left 80ms linear,transform 140ms ease;
+  font-size:29px;
+  line-height:34px;
+  text-align:center;
+  filter:drop-shadow(2px 2px 0 #000)
+}
+.runner-sprite.fallen{transform:translateX(-50%) rotate(90deg)}
+.runner-sprite.jumping{
+  animation:jumpArc 1.8s ease-in-out;
+}
+@keyframes jumpArc{
+  0%{transform:translateX(-50%) translateY(0)}
+  35%{transform:translateX(-50%) translateY(-27px) scale(1.08)}
+  65%{transform:translateX(-50%) translateY(-27px) scale(1.08)}
+  100%{transform:translateX(-50%) translateY(0)}
+}
+.shield{
+  position:absolute;
+  top:25px;
+  transform:translateX(-50%);
+  z-index:4;
+  font-size:14px
+}
+.defender{
+  position:absolute;
+  top:16px;
+  width:38px;
+  height:38px;
+  transform:translateX(-50%);
+  z-index:4;
+  font-size:31px;
+  line-height:38px;
+  text-align:center;
+  filter:drop-shadow(2px 2px 0 #000)
+}
+.defender:before{
+  content:"🚜";
+}
+.football{
+  position:absolute;
+  width:16px;height:9px;
+  border-radius:50%;
+  background:#8b4513;
+  border:2px solid #f8f9fa;
+  z-index:12;
+  pointer-events:none;
+  transform:translate(-50%,-50%) rotate(-20deg)
+}
+.nuke-ball{
+  width:22px;height:13px;
+  background:#ffd43b;
+  box-shadow:0 0 0 3px #111,0 0 14px #ffd43b
+}
+.toast{
+  position:absolute;z-index:20;
+  transform:translate(-50%,-100%);
+  background:#000;
+  color:#fff;
+  border:2px solid #fff;
+  padding:2px 5px;
+  font-size:10px;
+  font-weight:900;
+  pointer-events:none;
+  animation:toast .9s forwards
+}
+@keyframes toast{to{opacity:0;transform:translate(-50%,-165%)}}
+
+.controls-wrap{
+  margin-top:10px;
+  display:grid;
+  grid-template-columns:minmax(270px,1fr) minmax(250px,420px);
+  gap:10px
+}
+.control-panel{
+  padding:10px;
+  border:3px solid #4b5560;
+  background:#111820
+}
+.control-grid{
+  display:grid;
+  grid-template-columns:78px 1fr 78px;
+  grid-template-rows:48px 62px 48px;
+  gap:6px
+}
+.control{
+  border:0;
+  font-weight:900;
+  color:#111
+}
+#upBtn{grid-column:2;grid-row:1;background:#ff8787}
+#leftBtn{grid-column:1;grid-row:2;background:#ffd43b}
+#rightBtn{grid-column:3;grid-row:2;background:#ffd43b}
+#downBtn{grid-column:2;grid-row:3;background:#ff8787}
+#jumpBtn{grid-column:2;grid-row:2;background:#69db7c}
+.control:disabled{opacity:.3}
+.extra-actions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:6px;
+  margin-top:7px
+}
+.extra-actions button{
+  border:0;padding:9px;font-weight:900
+}
+#forwardBtn{background:#74c0fc;color:#111}
+#nukeBtn{background:#da77f2;color:#111}
+.target-title{font-size:11px;margin-bottom:7px}
+.target-grid{
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:5px
+}
+.target-btn{
+  border:2px solid #4dabf7;
+  background:#12283b;
+  color:#fff;
+  min-height:38px;
+  font-size:10px;
+  font-weight:900
+}
+.target-btn:disabled{opacity:.25}
+
+.reload-wrap{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-top:10px
+}
+.reload-dial{
+  width:58px;height:58px;
+  border-radius:50%;
+  background:conic-gradient(#ffd43b var(--pct),#27313a 0);
+  position:relative;
+  border:3px solid #fff
+}
+.reload-dial:after{
+  content:"";
+  position:absolute;inset:8px;border-radius:50%;
+  background:#111820
+}
+.reload-text{
+  position:absolute;inset:0;z-index:2;
+  display:grid;place-items:center;
+  font-size:10px;font-weight:900
+}
+.legend{font-size:10px;line-height:1.45;opacity:.72}
+
+.lobby-actions{
+  display:flex;gap:7px;flex-wrap:wrap;justify-content:center;margin-top:10px
+}
+.lobby-actions button{
+  border:0;padding:10px 13px;font-weight:900
+}
+#readyBtn{background:#51cf66;color:#111}
+#startBtn{background:#ffd43b;color:#111}
+#resetBtn{background:#868e96;color:#111}
+#startBtn:disabled{opacity:.3}
+
+.results{
+  width:min(620px,100%);
+  margin:12px auto 0
+}
+.result{
+  display:flex;justify-content:space-between;
+  border:2px solid #495057;
+  padding:7px 9px;margin:4px 0;
+  background:#10161c
+}
+
+.countdown{
+  position:fixed;inset:0;z-index:50;
+  display:grid;place-items:center;
+  background:#000b;
+  font-size:min(26vw,170px);
+  font-weight:900;
+  color:#ffd43b;
+  text-shadow:6px 6px 0 #c92a2a
+}
+
+
+.chat-launch{
+  position:fixed;
+  right:14px;
+  bottom:14px;
+  z-index:80;
+  border:3px solid #fff;
+  background:#ffd43b;
+  color:#111;
+  padding:10px 13px;
+  font-weight:900;
+  box-shadow:4px 4px 0 #000;
+}
+.chat-panel{
+  position:fixed;
+  right:14px;
+  bottom:14px;
+  z-index:81;
+  width:min(350px,calc(100vw - 28px));
+  height:330px;
+  display:flex;
+  flex-direction:column;
+  background:#10161c;
+  border:4px solid #fff;
+  box-shadow:6px 6px 0 #000;
+}
+.chat-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:8px 9px;
+  background:#ffd43b;
+  color:#111;
+  font-weight:900;
+}
+.chat-head button{
+  border:2px solid #111;
+  background:#fff;
+  color:#111;
+  font-weight:900;
+}
+.chat-messages{
+  flex:1;
+  overflow-y:auto;
+  padding:8px;
+  background:#0a0e12;
+}
+.chat-line{
+  padding:5px 3px;
+  border-bottom:1px solid #ffffff18;
+  font-size:12px;
+  line-height:1.3;
+  word-break:break-word;
+}
+.chat-line strong{color:#ffd43b}
+.chat-compose{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:6px;
+  padding:8px;
+  border-top:2px solid #495057;
+}
+.chat-compose input{
+  min-width:0;
+  background:#05080b;
+  color:#fff;
+  border:2px solid #adb5bd;
+  padding:8px;
+}
+.chat-compose button{
+  border:0;
+  background:#51cf66;
+  color:#111;
+  font-weight:900;
+  padding:8px 10px;
+}
+.chat-unread{
+  display:inline-grid;
+  place-items:center;
+  min-width:20px;
+  height:20px;
+  margin-left:5px;
+  padding:0 5px;
+  border-radius:10px;
+  background:#e03131;
+  color:#fff;
+  font-size:10px;
+}
+
+@media(max-width:850px){
+  .character-grid{grid-template-columns:repeat(2,1fr)}
+  .lane{height:46px}
+  .runner-sprite,.defender{top:21px}
+  .shield{top:20px}
+  .controls-wrap{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<section id="nameScreen">
+  <div class="setup pixel-panel">
+    <div class="kicker">DRAFT NIGHT // PLAYER ENTRY</div>
+    <h1>RETRO 100</h1>
+    <div>Enter your name first. Then claim one ridiculous racer before somebody else does.</div>
+    <input id="nameInput" maxlength="20" autocomplete="off" placeholder="PLAYER NAME">
+    <button id="toCharacters" class="big-btn">SELECT CHARACTER ▶</button>
+    <div id="error"></div>
+  </div>
+</section>
+
+<section id="characterScreen" class="hidden">
+  <div class="setup pixel-panel">
+    <div class="kicker">LOCKER ROOM // PICK ONE</div>
+    <h1>CHOOSE YOUR LEGEND</h1>
+    <div>Characters are exclusive. If somebody takes the 💩, you're out of luck.</div>
+    <div id="characterGrid" class="character-grid"></div>
+    <button id="joinBtn" class="big-btn" disabled>JOIN RACE</button>
+    <div id="characterError"></div>
+  </div>
+</section>
+
+<section id="gameScreen" class="hidden">
+  <div class="scorebar">
+    <div class="pill gold"><strong id="playerCount">0</strong>/10 RACERS</div>
+    <div id="stateLabel" class="pill">LOBBY</div>
+    <div id="streakLabel" class="pill">🎯 0/3</div>
+    <div id="defenderHitLabel" class="pill">🚜 0/3</div>
+    <div id="shieldLabel" class="pill">🛡 0/3</div>
+    <div id="nukeLabel" class="pill">☢ NO NUKE</div>
+    <div class="top-actions">
+      <div id="hostLabel" class="pill gold">HOST</div>
+      <button id="readyBtn" class="top-ready">I'M READY</button>
+    </div>
+  </div>
+
+  <div id="message"></div>
+
+  <div class="stadium">
+    <div class="crowd"></div>
+    <div id="track" class="track">
+      <div class="yard50"></div>
+      <div class="endzone"></div>
+    </div>
+  </div>
+
+  <div class="controls-wrap">
+    <div class="control-panel">
+      <div class="control-grid">
+        <button id="upBtn" class="control" disabled>↑ HIT</button>
+        <button id="leftBtn" class="control" disabled>← RUN</button>
+        <button id="jumpBtn" class="control" disabled>JUMP<br><small>SPACE</small></button>
+        <button id="rightBtn" class="control" disabled>RUN →</button>
+        <button id="downBtn" class="control" disabled>↓ HIT</button>
+      </div>
+
+      <div class="extra-actions">
+        <button id="forwardBtn" disabled>🏈 THROW AHEAD · F</button>
+        <button id="nukeBtn" disabled>☢ NUKE · N</button>
+      </div>
+
+      <div class="reload-wrap">
+        <div id="reloadDial" class="reload-dial" style="--pct:100%">
+          <div id="reloadText" class="reload-text">ARM<br>READY</div>
+        </div>
+        <div class="legend">
+          ←/→ alternate to run<br>
+          ↑/↓ hit adjacent racers<br>
+          SPACE makes a long jump — land on a defender to squash him<br>
+          F throws at your lane defender
+        </div>
+      </div>
+    </div>
+
+    <div class="control-panel">
+      <div class="target-title">TARGET RACER // KEYS 1–9, 0 = #10 // RANGE 30 YARDS</div>
+      <div id="targetGrid" class="target-grid"></div>
+    </div>
+  </div>
+
+  <div class="lobby-actions">
+    <button id="startBtn" class="hidden">START RACE</button>
+    <button id="resetBtn" class="hidden">RESET</button>
+  </div>
+
+  <div id="results" class="results"></div>
+</section>
+
+
+<button id="chatLaunch" class="chat-launch hidden">💬 TRASH TALK <span id="chatUnread" class="chat-unread hidden">0</span></button>
+
+<div id="chatPanel" class="chat-panel hidden">
+  <div class="chat-head">
+    <span>💬 TRASH TALK</span>
+    <button id="chatClose" type="button">—</button>
+  </div>
+  <div id="chatMessages" class="chat-messages"></div>
+  <form id="chatForm" class="chat-compose" autocomplete="off">
+    <input id="chatInput" maxlength="120" placeholder="Talk trash..." />
+    <button type="submit">SEND</button>
+  </form>
+</div>
+
+<div id="countdown" class="countdown hidden">3</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

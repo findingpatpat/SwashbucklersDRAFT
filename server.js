@@ -95,6 +95,7 @@ function initRacePlayer(p) {
   p.distance = 0;
   p.finished = false;
   p.place = null;
+  p.finishTimeMs = null;
   p.lastInput = null;
   p.lastPress = 0;
   p.lastAttackAt = 0;
@@ -128,7 +129,7 @@ function statePayload() {
     })),
     players: [...players.values()].map(p => ({
       id:p.id, name:p.name, lane:p.lane, distance:p.distance, ready:p.ready,
-      finished:p.finished, place:p.place,
+      finished:p.finished, place:p.place, finishTimeMs:p.finishTimeMs,
       isFallen:p.fallenUntil > now, fallenUntil:p.fallenUntil,
       streakTargetId:p.streakTargetId, streakCount:p.streakCount,
       shieldHits:p.shieldHits,
@@ -548,8 +549,19 @@ io.on("connection",socket=>{
     if (p.distance>=DISTANCE && !p.finished) {
       p.finished = true;
       p.place = finishOrder.length+1;
-      finishOrder.push({id:p.id,name:p.name,place:p.place});
-      io.emit("finish",{id:p.id,name:p.name,place:p.place});
+      p.finishTimeMs = Math.max(0, Date.now() - raceStartAt);
+      finishOrder.push({
+        id:p.id,
+        name:p.name,
+        place:p.place,
+        finishTimeMs:p.finishTimeMs
+      });
+      io.emit("finish",{
+        id:p.id,
+        name:p.name,
+        place:p.place,
+        finishTimeMs:p.finishTimeMs
+      });
 
       if (finishOrder.length===players.size) {
         raceState = "finished";

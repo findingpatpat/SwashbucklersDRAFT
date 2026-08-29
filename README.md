@@ -1,33 +1,19 @@
-# Retro Draft Race v8.4
+# Retro Draft Race v8.5
 
-This build is based directly on v8.3 and adds the requested multiplayer trash-talk chat.
+Based directly on v8.4.
 
-## Trash Talk Chat
-- Small floating 💬 TRASH TALK button in the bottom-right after a player joins.
-- Click it to open a compact chat window over the game.
-- Messages display the player's selected character emoji and player name.
-- Press Enter or SEND to post.
-- Maximum message length: 120 characters.
-- Server rate limit: one message per second per player.
-- The server retains the most recent 40 messages for players joining later.
-- Unread messages show a badge on the collapsed chat button.
-- Chat can be collapsed during the race.
-- Game controls are ignored while the chat input is focused, so typing numbers, arrows, Space, F, or N will not accidentally trigger race actions.
-- Only players who have actually joined the race can send chat messages.
+## New: finish times in results
+Each racer now gets an authoritative race time measured by the server from GO until they cross the 100-yard finish line.
 
-## Existing v8.3 gameplay retained
-- Funny exclusive emoji racers
-- Top-right I'M READY button
-- Bulldozer defensive players
-- Shield protects against defensive-player collision
-- 5-second defender reset
-- Hit 3 defensive players to earn a shield
-- 50% midfield Nuke trigger
-- Targeted football throws
-- Nuke chain
-- Jump/stomp system
-- 10-player online multiplayer
+The final results at the bottom show:
 
-## Render
-Replace the files in your existing GitHub repository with this package and commit/push.
-Your existing Render URL remains unchanged.
+#1 Patrick   58.42s
+#2 Mike      59.17s
+#3 Steve     61.03s
+
+Times are shown to the nearest hundredth of a second so they can be used as tiebreakers across multiple races.
+
+All v8.4 gameplay remains unchanged, including the trash-talk chat, bulldozers, shields, Nuke Ball, defender-hit shield rewards, and top-right ready button.
+
+## Deploy
+Replace your existing GitHub repository files with this package and commit/push. Render will redeploy using the same URL.
