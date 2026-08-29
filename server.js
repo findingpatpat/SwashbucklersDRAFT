@@ -563,6 +563,10 @@ io.on("connection",socket=>{
         finishTimeMs:p.finishTimeMs
       });
 
+      // Immediately publish the updated finishOrder, including elapsed time.
+      // This makes the result row appear with the time as soon as each racer finishes.
+      broadcastState();
+
       if (finishOrder.length===players.size) {
         raceState = "finished";
         clearPendingAttacks();

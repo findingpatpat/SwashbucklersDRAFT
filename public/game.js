@@ -412,7 +412,9 @@ socket.on("nukeBounceHit",e=>{
 });
 
 socket.on("finish",e=>{
-  if(e.id===myId) message.textContent=`FINISH #${e.place}`;
+  if(e.id===myId){
+    message.textContent=`FINISH #${e.place} — ${formatRaceTime(e.finishTimeMs)}`;
+  }
 });
 
 socket.on("go",()=>{
@@ -513,6 +515,11 @@ function animateNukeChain(ownerId,victims,gapMs){
   }
 }
 
+function formatRaceTime(ms){
+  if(ms == null || !Number.isFinite(ms)) return "";
+  return `${(ms/1000).toFixed(2)}s`;
+}
+
 function renderTargets(){
   targetGrid.innerHTML="";
   const active=canAct();
@@ -607,7 +614,8 @@ function render(){
   renderTargets();
 
   results.innerHTML=state.finishOrder.length
-    ? `<h3>FINAL DRAFT ORDER</h3>`+state.finishOrder.map(r=>`<div class="result"><strong>#${r.place}</strong><span>${escapeHtml(r.name)}</span></div>`).join("")
+    ? `<h3>FINAL DRAFT ORDER</h3><div class="result result-head"><strong>PLACE</strong><span>PLAYER</span><span>TIME</span></div>`+
+      state.finishOrder.map(r=>`<div class="result"><strong>#${r.place}</strong><span>${escapeHtml(r.name)}</span><span>${formatRaceTime(r.finishTimeMs)}</span></div>`).join("")
     : "";
 }
 

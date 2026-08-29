@@ -385,10 +385,24 @@ h1{
   margin:12px auto 0
 }
 .result{
-  display:flex;justify-content:space-between;
+  display:grid;
+  grid-template-columns:72px 1fr 90px;
+  gap:10px;
+  align-items:center;
   border:2px solid #495057;
-  padding:7px 9px;margin:4px 0;
+  padding:7px 9px;
+  margin:4px 0;
   background:#10161c
+}
+.result span:last-child{
+  text-align:right;
+  font-variant-numeric:tabular-nums;
+  font-weight:900;
+}
+.result-head{
+  opacity:.72;
+  font-size:11px;
+  letter-spacing:1px;
 }
 
 .countdown{
@@ -608,6 +622,6 @@ h1{
 <div id="countdown" class="countdown hidden">3</div>
 
 <script src="/socket.io/socket.io.js"></script>
-<script src="game.js"></script>
+<script src="game.js?v=8.5.1"></script>
 </body>
 </html>
